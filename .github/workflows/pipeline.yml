@@ -16,8 +16,10 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  SUPABASE_DB_HOST: db.zrxwptfzzsaehtpjhvij.supabase.co
+  SUPABASE_DB_NAME: postgres
+  SUPABASE_DB_USER: postgres
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
   NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
   NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
 
@@ -43,7 +45,7 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install biopython requests python-dotenv pandas numpy tqdm pydantic httpx
+          pip install biopython requests python-dotenv pandas numpy tqdm pydantic psycopg2-binary
 
       - name: 🔬 Fetch and parse sequences
         id: fetch
@@ -93,21 +95,22 @@ jobs:
           print('💾 Saved sequences to sequences_data.json')
           EOF
 
-      - name: 💾 Write to Supabase
+      - name: 💾 Write to Supabase (Direct SQL)
         if: github.event.inputs.dry_run != 'true'
         run: |
           python << 'EOF'
           import os
           import json
-          import httpx
+          import psycopg2
           from datetime import datetime
 
-          # Get env vars
-          supabase_url = os.environ.get('SUPABASE_URL', '').rstrip('/')
-          supabase_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+          # Get database connection details
+          db_host = os.environ.get('SUPABASE_DB_HOST')
+          db_password = os.environ.get('SUPABASE_DB_PASSWORD')
 
-          if not supabase_url or not supabase_key:
-              print('⚠️ Supabase secrets not configured - skipping database write')
+          if not db_host or not db_password:
+              print('⚠️ Database credentials not configured - skipping')
+              print('   Add SUPABASE_DB_PASSWORD to repository secrets')
               exit(0)
 
           # Load parsed sequences
@@ -118,84 +121,86 @@ jobs:
               print('⚠️ No sequences to write')
               exit(0)
 
-          print(f'📝 Writing {len(sequences)} sequences to Supabase...')
+          print(f'📝 Connecting to database...')
 
-          # Setup headers
-          headers = {
-              'apikey': supabase_key,
-              'Authorization': f'Bearer {supabase_key}',
-              'Content-Type': 'application/json',
-              'Prefer': 'resolution=merge-duplicates,return=representation',
-          }
+          # Connect to PostgreSQL
+          conn = psycopg2.connect(
+              host=db_host,
+              database='postgres',
+              user='postgres',
+              password=db_password,
+              port=5432,
+              sslmode='require'
+          )
+          conn.autocommit = True
+          cur = conn.cursor()
 
-          rest_url = f'{supabase_url}/rest/v1'
+          print(f'✅ Connected! Writing {len(sequences)} sequences...')
+
           written = 0
           errors = 0
 
           for seq in sequences:
               try:
-                  # Skip sequences without required fields
+                  # Skip if missing required fields
                   if not seq.get('strain_name') or not seq.get('raw_sequence'):
                       print(f"⏭️ Skipping {seq.get('genbank_id')}: missing required fields")
                       errors += 1
                       continue
+
+                  # Use INSERT ... ON CONFLICT (upsert)
+                  cur.execute("""
+                      INSERT INTO sequences (
+                          genbank_id, strain_name, segment, subtype, 
+                          raw_sequence, sequence_length, collection_date, 
+                          host, source
+                      ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                      ON CONFLICT (genbank_id) DO UPDATE SET
+                          strain_name = EXCLUDED.strain_name,
+                          raw_sequence = EXCLUDED.raw_sequence,
+                          sequence_length = EXCLUDED.sequence_length,
+                          collection_date = EXCLUDED.collection_date,
+                          updated_at = NOW()
+                  """, (
+                      seq.get('genbank_id'),
+                      seq.get('strain_name'),
+                      seq.get('segment', 'HA'),
+                      seq.get('subtype', 'H3N2'),
+                      seq.get('raw_sequence'),
+                      seq.get('sequence_length') or len(seq.get('raw_sequence', '')),
+                      seq.get('collection_date'),
+                      seq.get('host', 'Human'),
+                      'ncbi'
+                  ))
+                  written += 1
                   
-                  record = {
-                      'genbank_id': seq.get('genbank_id'),
-                      'strain_name': seq.get('strain_name'),
-                      'segment': seq.get('segment', 'HA'),
-                      'subtype': seq.get('subtype', 'H3N2'),
-                      'raw_sequence': seq.get('raw_sequence'),
-                      'sequence_length': seq.get('sequence_length') or len(seq.get('raw_sequence', '')),
-                      'collection_date': seq.get('collection_date'),  # Now nullable
-                      'host': seq.get('host', 'Human'),
-                      'source': 'ncbi',
-                  }
-                  
-                  # Remove None values except source
-                  record = {k: v for k, v in record.items() if v is not None}
-                  
-                  response = httpx.post(
-                      f'{rest_url}/sequences',
-                      headers=headers,
-                      params={'on_conflict': 'genbank_id'},
-                      json=[record],
-                      timeout=30.0,
-                  )
-                  
-                  if response.status_code in [200, 201]:
-                      written += 1
-                  else:
-                      print(f'⚠️ HTTP {response.status_code} for {seq.get("genbank_id")}: {response.text[:200]}')
-                      errors += 1
-                      
               except Exception as e:
-                  print(f'❌ Error: {e}')
+                  print(f'❌ Error for {seq.get("genbank_id")}: {e}')
                   errors += 1
 
           print(f'✅ Written: {written}')
           print(f'❌ Errors: {errors}')
 
-          # Log to pipeline_logs table
+          # Log the job
           try:
-              log_record = {
-                  'job_name': 'ncbi_ingest',
-                  'status': 'success' if errors == 0 else 'partial',
-                  'records_processed': written,
-                  'records_failed': errors,
-                  'message': f'Wrote {written} sequences, {errors} errors',
-                  'started_at': datetime.utcnow().isoformat(),
-                  'completed_at': datetime.utcnow().isoformat(),
-              }
-              httpx.post(
-                  f'{rest_url}/pipeline_logs',
-                  headers={**headers, 'Prefer': 'return=representation'},
-                  json=[log_record],
-                  timeout=10.0,
-              )
+              status = 'success' if errors == 0 else 'partial'
+              cur.execute("""
+                  INSERT INTO pipeline_logs (job_name, status, records_processed, records_failed, message)
+                  VALUES (%s, %s, %s, %s, %s)
+              """, (
+                  'ncbi_ingest',
+                  status,
+                  written,
+                  errors,
+                  f'Wrote {written} sequences, {errors} errors'
+              ))
               print('📋 Logged to pipeline_logs')
           except Exception as e:
               print(f'⚠️ Could not log: {e}')
+
+          cur.close()
+          conn.close()
+          print('✅ Done!')
           EOF
 
       - name: 📤 Upload artifacts
