@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 interface DashboardStats {
@@ -54,7 +55,35 @@ export function useDashboardStats() {
     });
 }
 
+
+
 export function usePipelineLogs(limit: number = 10) {
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        const channel = supabase
+            .channel('pipeline_logs_changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'pipeline_logs'
+                },
+                (payload) => {
+                    console.log('Realtime update:', payload);
+                    queryClient.invalidateQueries({ queryKey: ['stats', 'pipeline-logs'] });
+                    // Also invalidate dashboard stats to show latest "Last updated"
+                    queryClient.invalidateQueries({ queryKey: ['stats', 'dashboard'] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [queryClient]);
+
     return useQuery({
         queryKey: ['stats', 'pipeline-logs', limit],
         queryFn: async () => {
@@ -70,7 +99,8 @@ export function usePipelineLogs(limit: number = 10) {
 
             return data ?? [];
         },
-        staleTime: 1000 * 60, // 1 minute
+        // Longer stale time is fine now because realtime invalidates it
+        staleTime: 1000 * 60 * 5,
     });
 }
 

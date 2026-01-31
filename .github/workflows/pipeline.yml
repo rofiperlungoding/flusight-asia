@@ -110,11 +110,47 @@ jobs:
               print('⚠️ Supabase secrets not configured - skipping')
               exit(0)
 
+          # Initialize log_id
+          log_id = None
+          
+          # 1. Log job start
+          try:
+              log_headers = {**headers, 'Prefer': 'return=representation'}
+              start_response = httpx.post(
+                  f'{rest_url}/pipeline_logs',
+                  headers=log_headers,
+                  json=[{
+                      'job_name': 'ncbi_ingest',
+                      'status': 'running',
+                      'records_processed': 0,
+                      'records_failed': 0,
+                      'message': 'Starting ingestion...',
+                  }],
+                  timeout=10.0,
+              )
+              if start_response.status_code == 201:
+                  log_id = start_response.json()[0]['id']
+                  print(f'📋 Started pipeline log: {log_id}')
+          except Exception as e:
+              print(f'⚠️ Failed to start log: {e}')
+
           with open('sequences_data.json', 'r') as f:
               sequences = json.load(f)
 
           if not sequences:
               print('⚠️ No sequences to write')
+              # Update log if possible
+              if log_id:
+                  httpx.patch(
+                      f'{rest_url}/pipeline_logs',
+                      headers=headers,
+                      params={'id': f'eq.{log_id}'},
+                      json={
+                          'status': 'success', 
+                          'message': 'No sequences to write',
+                          'completed_at': datetime.now().isoformat()
+                      }
+                  )
               exit(0)
 
           print(f'📝 Writing {len(sequences)} sequences to Supabase...')
@@ -174,6 +210,23 @@ jobs:
                   if response.status_code in [200, 201, 204]:
                       written += len(records)
                       print(f'  ✅ Batch {i//batch_size + 1}: {len(records)} records')
+                      
+                      # Update log progress every 10 batches (100 records)
+                      if log_id and (i//batch_size + 1) % 10 == 0:
+                          try:
+                              httpx.patch(
+                                  f'{rest_url}/pipeline_logs',
+                                  headers=headers,
+                                  params={'id': f'eq.{log_id}'},
+                                  json={
+                                      'records_processed': written,
+                                      'records_failed': errors,
+                                      'message': f'Processing... {written} written'
+                                  }
+                              )
+                          except:
+                              pass
+
                   else:
                       print(f'  ⚠️ Batch {i//batch_size + 1} HTTP {response.status_code}: {response.text[:200]}')
                       errors += len(records)
@@ -188,23 +241,44 @@ jobs:
           print(f'   ⏭️ Skipped: {skipped}')
           print(f'   ❌ Errors: {errors}')
 
-          # Log the job
+          # Log the job completion
           try:
               status = 'success' if errors == 0 else 'partial'
-              log_headers = {**headers, 'Prefer': 'return=minimal'}
-              httpx.post(
-                  f'{rest_url}/pipeline_logs',
-                  headers=log_headers,
-                  json=[{
-                      'job_name': 'ncbi_ingest',
-                      'status': status,
-                      'records_processed': written,
-                      'records_failed': errors,
-                      'message': f'Wrote {written}, skipped {skipped}, errors {errors}',
-                  }],
-                  timeout=10.0,
-              )
-              print('📋 Logged to pipeline_logs')
+              final_message = f'Wrote {written}, skipped {skipped}, errors {errors}'
+              
+              if log_id:
+                  # Update existing log
+                  httpx.patch(
+                      f'{rest_url}/pipeline_logs',
+                      headers=headers,
+                      params={'id': f'eq.{log_id}'},
+                      json={
+                          'status': status,
+                          'records_processed': written,
+                          'records_failed': errors,
+                          'message': final_message,
+                          'completed_at': datetime.now().isoformat()
+                      },
+                      timeout=10.0,
+                  )
+                  print('📋 Updated pipeline log')
+              else:
+                  # Fallback if start log failed
+                  log_headers = {**headers, 'Prefer': 'return=minimal'}
+                  httpx.post(
+                      f'{rest_url}/pipeline_logs',
+                      headers=log_headers,
+                      json=[{
+                          'job_name': 'ncbi_ingest',
+                          'status': status,
+                          'records_processed': written,
+                          'records_failed': errors,
+                          'message': final_message,
+                          'completed_at': datetime.now().isoformat()
+                      }],
+                      timeout=10.0,
+                  )
+                  print('📋 Created fallback pipeline log')
           except Exception as e:
               print(f'⚠️ Log error: {e}')
           
