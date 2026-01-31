@@ -1,0 +1,54 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flusight-pipeline"
+version = "0.1.0"
+description = "FluSight-Asia data and ML pipeline"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "biopython>=1.83",
+    "requests>=2.31.0",
+    "supabase>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "pandas>=2.1.0",
+    "numpy>=1.26.0",
+    "tqdm>=4.66.0",
+    "pydantic>=2.5.0",
+    "httpx>=0.26.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+ml = [
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "pytorch-geometric>=2.4.0",
+]
+
+[project.scripts]
+flusight = "flusight.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/flusight"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
