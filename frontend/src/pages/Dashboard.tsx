@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { useDashboardStats, useRecentSequences, usePipelineLogs } from '../hooks';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { ClusterMap } from '../components/Map/ClusterMap';
+import { TemporalTrendChart } from '../components/Charts/TemporalTrendChart';
 
 export function Dashboard() {
     const { data: stats, isLoading: statsLoading } = useDashboardStats();
@@ -174,19 +176,13 @@ export function Dashboard() {
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Large Chart Area */}
-                <div className="lg:col-span-2 card bg-gradient-to-b from-white to-gray-50 dark:from-gray-800 dark:to-gray-800/50">
-                    <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Regional Spread Forecast</h3>
-                        <select className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-sm rounded-lg px-3 py-1 text-gray-600 dark:text-gray-300 outline-none focus:ring-2 focus:ring-primary-500/50">
-                            <option>Next 3 Months</option>
-                            <option>Next 6 Months</option>
-                        </select>
+                <div className="lg:col-span-2 card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-0 overflow-hidden relative h-[600px]">
+                    <div className="absolute top-4 left-4 z-[1000] bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span className="text-lg">🗺️</span> Geographic Distribution
+                        </h3>
                     </div>
-                    <div className="h-80 rounded-xl bg-gray-100 dark:bg-gray-700/50 border border-dashed border-gray-300 dark:border-gray-600 flex flex-col items-center justify-center text-gray-400">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-4 opacity-50"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-                        <p>Geographic spread visualization</p>
-                        <span className="text-xs opacity-70 mt-2">Map integration coming in Phase 3</span>
-                    </div>
+                    <ClusterMap />
                 </div>
 
                 {/* Recent Sequences */}
@@ -247,6 +243,19 @@ export function Dashboard() {
                         View All Sequences →
                     </button>
                 </div>
+            </div>
+            {/* Temporal Trends */}
+            <div className="card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="text-xl">📈</span> Sequence Collection Trends
+                    </h3>
+                    <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-violet-500"></span>
+                        <span className="text-sm text-slate-500">Collected per Month</span>
+                    </div>
+                </div>
+                <TemporalTrendChart />
             </div>
         </div>
     );

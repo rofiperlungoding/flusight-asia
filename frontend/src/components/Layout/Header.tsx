@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { NotificationCenter } from '../Alerts/NotificationCenter';
 
 export function Header() {
     const [darkMode, setDarkMode] = useState(() => {
@@ -50,10 +51,8 @@ export function Header() {
                 {/* Right side actions */}
                 <div className="flex items-center space-x-2">
                     {/* Notifications */}
-                    <button className="relative p-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                        <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
-                    </button>
+                    {/* Notifications */}
+                    <NotificationCenter />
 
                     <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1"></div>
 
