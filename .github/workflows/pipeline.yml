@@ -16,12 +16,8 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  # Use Supabase Session Pooler for IPv4 compatibility
-  SUPABASE_DB_HOST: aws-0-ap-southeast-1.pooler.supabase.com
-  SUPABASE_DB_PORT: 6543
-  SUPABASE_DB_NAME: postgres
-  SUPABASE_DB_USER: postgres.zrxwptfzzsaehtpjhvij
-  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
   NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
   NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
 
@@ -47,7 +43,7 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install biopython requests python-dotenv pandas numpy tqdm pydantic psycopg2-binary
+          pip install biopython requests python-dotenv pandas numpy tqdm pydantic httpx
 
       - name: 🔬 Fetch and parse sequences
         id: fetch
@@ -97,27 +93,22 @@ jobs:
           print('💾 Saved sequences to sequences_data.json')
           EOF
 
-      - name: 💾 Write to Supabase (Direct SQL)
+      - name: 💾 Write to Supabase
         if: github.event.inputs.dry_run != 'true'
         run: |
           python << 'EOF'
           import os
           import json
-          import psycopg2
+          import httpx
           from datetime import datetime
 
-          # Get database connection details (using Supabase Pooler for IPv4)
-          db_host = os.environ.get('SUPABASE_DB_HOST')
-          db_port = int(os.environ.get('SUPABASE_DB_PORT', '6543'))
-          db_user = os.environ.get('SUPABASE_DB_USER')
-          db_password = os.environ.get('SUPABASE_DB_PASSWORD')
+          supabase_url = os.environ.get('SUPABASE_URL', '').rstrip('/')
+          supabase_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
 
-          if not db_password:
-              print('⚠️ Database credentials not configured - skipping')
-              print('   Add SUPABASE_DB_PASSWORD to repository secrets')
+          if not supabase_url or not supabase_key:
+              print('⚠️ Supabase secrets not configured - skipping')
               exit(0)
 
-          # Load parsed sequences
           with open('sequences_data.json', 'r') as f:
               sequences = json.load(f)
 
@@ -125,87 +116,97 @@ jobs:
               print('⚠️ No sequences to write')
               exit(0)
 
-          print(f'📝 Connecting to database via pooler...')
-          print(f'   Host: {db_host}:{db_port}')
-          print(f'   User: {db_user}')
+          print(f'📝 Writing {len(sequences)} sequences to Supabase...')
+          print(f'   URL: {supabase_url}')
 
-          # Connect to PostgreSQL via Supabase Pooler
-          conn = psycopg2.connect(
-              host=db_host,
-              database='postgres',
-              user=db_user,
-              password=db_password,
-              port=db_port,
-              sslmode='require'
-          )
-          conn.autocommit = True
-          cur = conn.cursor()
-
-          print(f'✅ Connected! Writing {len(sequences)} sequences...')
+          rest_url = f'{supabase_url}/rest/v1'
+          headers = {
+              'apikey': supabase_key,
+              'Authorization': f'Bearer {supabase_key}',
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates,return=minimal',
+          }
 
           written = 0
+          skipped = 0
           errors = 0
 
-          for seq in sequences:
-              try:
-                  # Skip if missing required fields
+          # Process in batches of 10 for efficiency
+          batch_size = 10
+          for i in range(0, len(sequences), batch_size):
+              batch = sequences[i:i+batch_size]
+              records = []
+              
+              for seq in batch:
                   if not seq.get('strain_name') or not seq.get('raw_sequence'):
-                      print(f"⏭️ Skipping {seq.get('genbank_id')}: missing required fields")
-                      errors += 1
+                      skipped += 1
                       continue
-
-                  # Use INSERT ... ON CONFLICT (upsert)
-                  cur.execute("""
-                      INSERT INTO sequences (
-                          genbank_id, strain_name, segment, subtype, 
-                          raw_sequence, sequence_length, collection_date, 
-                          host, source
-                      ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                      ON CONFLICT (genbank_id) DO UPDATE SET
-                          strain_name = EXCLUDED.strain_name,
-                          raw_sequence = EXCLUDED.raw_sequence,
-                          sequence_length = EXCLUDED.sequence_length,
-                          collection_date = EXCLUDED.collection_date,
-                          updated_at = NOW()
-                  """, (
-                      seq.get('genbank_id'),
-                      seq.get('strain_name'),
-                      seq.get('segment', 'HA'),
-                      seq.get('subtype', 'H3N2'),
-                      seq.get('raw_sequence'),
-                      seq.get('sequence_length') or len(seq.get('raw_sequence', '')),
-                      seq.get('collection_date'),
-                      seq.get('host', 'Human'),
-                      'ncbi'
-                  ))
-                  written += 1
+                      
+                  record = {
+                      'genbank_id': seq.get('genbank_id'),
+                      'strain_name': seq.get('strain_name'),
+                      'segment': seq.get('segment', 'HA'),
+                      'subtype': seq.get('subtype', 'H3N2'),
+                      'raw_sequence': seq.get('raw_sequence'),
+                      'sequence_length': seq.get('sequence_length') or len(seq.get('raw_sequence', '')),
+                      'host': seq.get('host', 'Human'),
+                      'source': 'ncbi',
+                  }
+                  # Add collection_date only if present
+                  if seq.get('collection_date'):
+                      record['collection_date'] = seq.get('collection_date')
                   
+                  records.append(record)
+              
+              if not records:
+                  continue
+                  
+              try:
+                  response = httpx.post(
+                      f'{rest_url}/sequences',
+                      headers=headers,
+                      params={'on_conflict': 'genbank_id'},
+                      json=records,
+                      timeout=60.0,
+                  )
+                  
+                  if response.status_code in [200, 201, 204]:
+                      written += len(records)
+                      print(f'  ✅ Batch {i//batch_size + 1}: {len(records)} records')
+                  else:
+                      print(f'  ⚠️ Batch {i//batch_size + 1} HTTP {response.status_code}: {response.text[:200]}')
+                      errors += len(records)
+                      
               except Exception as e:
-                  print(f'❌ Error for {seq.get("genbank_id")}: {e}')
-                  errors += 1
+                  print(f'  ❌ Batch {i//batch_size + 1} error: {e}')
+                  errors += len(records)
 
-          print(f'✅ Written: {written}')
-          print(f'❌ Errors: {errors}')
+          print(f'')
+          print(f'📊 Results:')
+          print(f'   ✅ Written: {written}')
+          print(f'   ⏭️ Skipped: {skipped}')
+          print(f'   ❌ Errors: {errors}')
 
           # Log the job
           try:
               status = 'success' if errors == 0 else 'partial'
-              cur.execute("""
-                  INSERT INTO pipeline_logs (job_name, status, records_processed, records_failed, message)
-                  VALUES (%s, %s, %s, %s, %s)
-              """, (
-                  'ncbi_ingest',
-                  status,
-                  written,
-                  errors,
-                  f'Wrote {written} sequences, {errors} errors'
-              ))
+              log_headers = {**headers, 'Prefer': 'return=minimal'}
+              httpx.post(
+                  f'{rest_url}/pipeline_logs',
+                  headers=log_headers,
+                  json=[{
+                      'job_name': 'ncbi_ingest',
+                      'status': status,
+                      'records_processed': written,
+                      'records_failed': errors,
+                      'message': f'Wrote {written}, skipped {skipped}, errors {errors}',
+                  }],
+                  timeout=10.0,
+              )
               print('📋 Logged to pipeline_logs')
           except Exception as e:
-              print(f'⚠️ Could not log: {e}')
-
-          cur.close()
-          conn.close()
+              print(f'⚠️ Log error: {e}')
+          
           print('✅ Done!')
           EOF
 
