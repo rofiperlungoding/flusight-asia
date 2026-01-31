@@ -134,19 +134,25 @@ jobs:
 
           for seq in sequences:
               try:
+                  # Skip sequences without required fields
+                  if not seq.get('strain_name') or not seq.get('raw_sequence'):
+                      print(f"⏭️ Skipping {seq.get('genbank_id')}: missing required fields")
+                      errors += 1
+                      continue
+                  
                   record = {
                       'genbank_id': seq.get('genbank_id'),
                       'strain_name': seq.get('strain_name'),
                       'segment': seq.get('segment', 'HA'),
                       'subtype': seq.get('subtype', 'H3N2'),
                       'raw_sequence': seq.get('raw_sequence'),
-                      'sequence_length': seq.get('sequence_length'),
-                      'collection_date': seq.get('collection_date'),
+                      'sequence_length': seq.get('sequence_length') or len(seq.get('raw_sequence', '')),
+                      'collection_date': seq.get('collection_date'),  # Now nullable
                       'host': seq.get('host', 'Human'),
-                      'source': seq.get('source', 'ncbi'),
+                      'source': 'ncbi',
                   }
                   
-                  # Remove None values
+                  # Remove None values except source
                   record = {k: v for k, v in record.items() if v is not None}
                   
                   response = httpx.post(
@@ -160,7 +166,7 @@ jobs:
                   if response.status_code in [200, 201]:
                       written += 1
                   else:
-                      print(f'⚠️ HTTP {response.status_code}: {response.text[:100]}')
+                      print(f'⚠️ HTTP {response.status_code} for {seq.get("genbank_id")}: {response.text[:200]}')
                       errors += 1
                       
               except Exception as e:
