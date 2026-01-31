@@ -1,0 +1,25 @@
+{
+    "name": "flusight-asia",
+    "version": "0.1.0",
+    "private": true,
+    "description": "H3N2 Influenza Mutation Intelligence Platform for Asia",
+    "workspaces": [
+        "frontend"
+    ],
+    "scripts": {
+        "dev": "npm run dev --workspace=frontend",
+        "build": "npm run build --workspace=frontend",
+        "preview": "npm run preview --workspace=frontend",
+        "lint": "npm run lint --workspace=frontend",
+        "test": "npm run test --workspace=frontend"
+    },
+    "keywords": [
+        "influenza",
+        "h3n2",
+        "machine-learning",
+        "healthcare",
+        "bioinformatics"
+    ],
+    "author": "",
+    "license": "MIT"
+}
