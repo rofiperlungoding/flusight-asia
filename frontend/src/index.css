@@ -10,7 +10,7 @@
   html {
     @apply antialiased;
   }
-  
+
   body {
     @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
     @apply font-sans;
@@ -25,13 +25,13 @@
     @apply transition-colors duration-200;
     @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
   }
-  
+
   .btn-secondary {
     @apply bg-secondary-600 hover:bg-secondary-700 text-white;
     @apply px-4 py-2 rounded-lg font-medium;
     @apply transition-colors duration-200;
   }
-  
+
   .card {
     @apply bg-white dark:bg-gray-800;
     @apply rounded-xl shadow-sm border border-gray-200 dark:border-gray-700;

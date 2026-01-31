@@ -9,7 +9,7 @@ on:
       max_sequences:
         description: 'Maximum sequences to fetch'
         required: false
-        default: '500'
+        default: '100'
       dry_run:
         description: 'Dry run (skip database writes)'
         required: false
@@ -46,7 +46,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install biopython requests python-dotenv pandas numpy tqdm pydantic httpx
 
-      - name: 🔬 Fetch sequences from NCBI
+      - name: 🔬 Fetch and parse sequences
         id: fetch
         run: |
           python -c "
@@ -58,7 +58,7 @@ jobs:
 
           email = os.environ.get('NCBI_EMAIL')
           api_key = os.environ.get('NCBI_API_KEY')
-          max_sequences = int('${{ github.event.inputs.max_sequences }}' or '500')
+          max_sequences = int('${{ github.event.inputs.max_sequences }}' or '100')
 
           print(f'📧 NCBI Email: {email[:5]}***')
           print(f'🔢 Max sequences: {max_sequences}')
@@ -71,52 +71,64 @@ jobs:
           ids = fetcher.search(query, max_results=max_sequences)
           print(f'✅ Found {len(ids)} sequence IDs')
 
-          # Save IDs for next step
-          with open('sequence_ids.json', 'w') as f:
-              json.dump(ids, f)
-          
-          print(f'::set-output name=count::{len(ids)}')
-          "
-
-      - name: 📊 Parse and store sequences
-        if: github.event.inputs.dry_run != 'true'
-        run: |
-          python -c "
-          import sys
-          sys.path.insert(0, 'src')
-          from flusight.ingestion.ncbi import NCBIFetcher
-          import os
-          import json
-
-          email = os.environ.get('NCBI_EMAIL')
-          api_key = os.environ.get('NCBI_API_KEY')
-
-          # Load IDs from previous step
-          with open('sequence_ids.json', 'r') as f:
-              ids = json.load(f)
-
           if not ids:
-              print('⚠️ No sequences to process')
+              print('⚠️ No sequences found')
+              with open('sequences_data.json', 'w') as f:
+                  json.dump([], f)
               exit(0)
 
-          print(f'📥 Fetching {len(ids)} sequences...')
-          
-          fetcher = NCBIFetcher(email=email, api_key=api_key)
+          print(f'📥 Fetching sequences from NCBI...')
           sequences = []
           
           for i, record in enumerate(fetcher.fetch_records(ids)):
               parsed = fetcher.parse_record(record)
               sequences.append(parsed)
-              if (i + 1) % 50 == 0:
+              if (i + 1) % 25 == 0:
                   print(f'  Processed {i + 1}/{len(ids)}...')
 
           print(f'✅ Parsed {len(sequences)} sequences')
 
-          # Save to JSON for now (DB integration in Phase 2)
+          # Save to JSON
           with open('sequences_data.json', 'w') as f:
               json.dump(sequences, f, default=str, indent=2)
 
           print('💾 Saved sequences to sequences_data.json')
+          "
+
+      - name: 💾 Write to Supabase
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, 'src')
+          import os
+          import json
+
+          # Check if secrets are configured
+          supabase_url = os.environ.get('SUPABASE_URL')
+          supabase_key = os.environ.get('SUPABASE_SERVICE_KEY')
+
+          if not supabase_url or not supabase_key:
+              print('⚠️ Supabase secrets not configured - skipping database write')
+              print('   Add SUPABASE_URL and SUPABASE_SERVICE_KEY to repository secrets')
+              exit(0)
+
+          # Load parsed sequences
+          with open('sequences_data.json', 'r') as f:
+              sequences = json.load(f)
+
+          if not sequences:
+              print('⚠️ No sequences to write')
+              exit(0)
+
+          print(f'📝 Writing {len(sequences)} sequences to Supabase...')
+
+          from flusight.storage.lightweight_client import write_sequences_to_supabase
+          
+          stats = write_sequences_to_supabase(sequences)
+          
+          print(f'✅ Written: {stats[\"written\"]}')
+          print(f'❌ Errors: {stats[\"errors\"]}')
           "
 
       - name: 📤 Upload artifacts
@@ -124,17 +136,5 @@ jobs:
         with:
           name: sequence-data
           path: |
-            pipeline/sequence_ids.json
             pipeline/sequences_data.json
           retention-days: 7
-
-  # Future: ML training job (Phase 2)
-  # train-models:
-  #   name: 🤖 Train Models
-  #   needs: ingest-sequences
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Download sequence data
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: sequence-data
