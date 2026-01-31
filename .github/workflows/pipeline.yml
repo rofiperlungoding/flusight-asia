@@ -1,0 +1,140 @@
+name: FluSight Data Pipeline
+
+on:
+  schedule:
+    # Run weekly on Sundays at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      max_sequences:
+        description: 'Maximum sequences to fetch'
+        required: false
+        default: '500'
+      dry_run:
+        description: 'Dry run (skip database writes)'
+        required: false
+        default: 'false'
+
+env:
+  PYTHON_VERSION: '3.11'
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+  NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
+  NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
+
+jobs:
+  ingest-sequences:
+    name: 🧬 Ingest Sequences
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pipeline
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: pipeline/pyproject.toml
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install biopython requests python-dotenv pandas numpy tqdm pydantic httpx
+
+      - name: 🔬 Fetch sequences from NCBI
+        id: fetch
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, 'src')
+          from flusight.ingestion.ncbi import NCBIFetcher
+          import os
+          import json
+
+          email = os.environ.get('NCBI_EMAIL')
+          api_key = os.environ.get('NCBI_API_KEY')
+          max_sequences = int('${{ github.event.inputs.max_sequences }}' or '500')
+
+          print(f'📧 NCBI Email: {email[:5]}***')
+          print(f'🔢 Max sequences: {max_sequences}')
+
+          fetcher = NCBIFetcher(email=email, api_key=api_key)
+          query = fetcher.build_search_query(subtype='H3N2', segment='HA', region='Asia')
+          
+          print(f'🔍 Query: {query[:80]}...')
+          
+          ids = fetcher.search(query, max_results=max_sequences)
+          print(f'✅ Found {len(ids)} sequence IDs')
+
+          # Save IDs for next step
+          with open('sequence_ids.json', 'w') as f:
+              json.dump(ids, f)
+          
+          print(f'::set-output name=count::{len(ids)}')
+          "
+
+      - name: 📊 Parse and store sequences
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, 'src')
+          from flusight.ingestion.ncbi import NCBIFetcher
+          import os
+          import json
+
+          email = os.environ.get('NCBI_EMAIL')
+          api_key = os.environ.get('NCBI_API_KEY')
+
+          # Load IDs from previous step
+          with open('sequence_ids.json', 'r') as f:
+              ids = json.load(f)
+
+          if not ids:
+              print('⚠️ No sequences to process')
+              exit(0)
+
+          print(f'📥 Fetching {len(ids)} sequences...')
+          
+          fetcher = NCBIFetcher(email=email, api_key=api_key)
+          sequences = []
+          
+          for i, record in enumerate(fetcher.fetch_records(ids)):
+              parsed = fetcher.parse_record(record)
+              sequences.append(parsed)
+              if (i + 1) % 50 == 0:
+                  print(f'  Processed {i + 1}/{len(ids)}...')
+
+          print(f'✅ Parsed {len(sequences)} sequences')
+
+          # Save to JSON for now (DB integration in Phase 2)
+          with open('sequences_data.json', 'w') as f:
+              json.dump(sequences, f, default=str, indent=2)
+
+          print('💾 Saved sequences to sequences_data.json')
+          "
+
+      - name: 📤 Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sequence-data
+          path: |
+            pipeline/sequence_ids.json
+            pipeline/sequences_data.json
+          retention-days: 7
+
+  # Future: ML training job (Phase 2)
+  # train-models:
+  #   name: 🤖 Train Models
+  #   needs: ingest-sequences
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Download sequence data
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: sequence-data
