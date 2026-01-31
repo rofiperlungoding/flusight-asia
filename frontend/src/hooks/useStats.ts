@@ -94,7 +94,7 @@ export function useLocationStats() {
             const countsByCountry: Record<string, { count: number; country: string; lat: number; lng: number }> = {};
 
             for (const seq of data ?? []) {
-                const loc = seq.locations as { country: string; country_code: string; lat: number; lng: number };
+                const loc = seq.locations as unknown as { country: string; country_code: string; lat: number; lng: number } | null;
                 if (loc) {
                     if (!countsByCountry[loc.country]) {
                         countsByCountry[loc.country] = {

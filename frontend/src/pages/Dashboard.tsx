@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom';
 import { useDashboardStats, useRecentSequences } from '../hooks';
 import { formatDistanceToNow } from 'date-fns';
+import { supabase } from '../lib/supabase';
 
 export function Dashboard() {
     const { data: stats, isLoading: statsLoading } = useDashboardStats();
@@ -27,7 +29,24 @@ export function Dashboard() {
                     >
                         Refresh Data
                     </button>
-                    <button className="btn-primary flex items-center gap-2">
+                    <button
+                        className="btn-primary flex items-center gap-2"
+                        onClick={async () => {
+                            // Generate CSV report
+                            const { data } = await supabase.from('sequences').select('strain_name, genbank_id, collection_date, sequence_length, source').limit(1000);
+                            if (data && data.length > 0) {
+                                const headers = Object.keys(data[0]).join(',');
+                                const rows = data.map(row => Object.values(row).join(','));
+                                const csv = [headers, ...rows].join('\n');
+                                const blob = new Blob([csv], { type: 'text/csv' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `flusight-report-${new Date().toISOString().split('T')[0]}.csv`;
+                                a.click();
+                            }
+                        }}
+                    >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         Download Report
                     </button>
@@ -135,8 +154,9 @@ export function Dashboard() {
                         ) : recentSeqs && recentSeqs.length > 0 ? (
                             // Actual data
                             recentSeqs.map((seq) => (
-                                <div
+                                <Link
                                     key={seq.id}
+                                    to={`/sequences/${seq.id}`}
                                     className="group flex gap-4 p-3 rounded-xl bg-slate-50/50 dark:bg-slate-700/20 border border-slate-100 dark:border-slate-700/30 hover:bg-white dark:hover:bg-slate-700/50 hover:shadow-md hover:shadow-slate-200/50 dark:hover:shadow-none hover:border-primary-200 dark:hover:border-primary-500/30 transition-all cursor-pointer"
                                 >
                                     <div className="w-2 h-2 mt-2 rounded-full bg-primary-500 shrink-0 group-hover:scale-125 transition-transform"></div>
@@ -150,7 +170,7 @@ export function Dashboard() {
                                             <span>{seq.sequence_length}bp</span>
                                         </div>
                                     </div>
-                                </div>
+                                </Link>
                             ))
                         ) : (
                             // Empty state
