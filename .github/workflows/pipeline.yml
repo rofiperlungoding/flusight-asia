@@ -16,9 +16,11 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  SUPABASE_DB_HOST: db.zrxwptfzzsaehtpjhvij.supabase.co
+  # Use Supabase Session Pooler for IPv4 compatibility
+  SUPABASE_DB_HOST: aws-0-ap-southeast-1.pooler.supabase.com
+  SUPABASE_DB_PORT: 6543
   SUPABASE_DB_NAME: postgres
-  SUPABASE_DB_USER: postgres
+  SUPABASE_DB_USER: postgres.zrxwptfzzsaehtpjhvij
   SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
   NCBI_EMAIL: ${{ secrets.NCBI_EMAIL }}
   NCBI_API_KEY: ${{ secrets.NCBI_API_KEY }}
@@ -104,11 +106,13 @@ jobs:
           import psycopg2
           from datetime import datetime
 
-          # Get database connection details
+          # Get database connection details (using Supabase Pooler for IPv4)
           db_host = os.environ.get('SUPABASE_DB_HOST')
+          db_port = int(os.environ.get('SUPABASE_DB_PORT', '6543'))
+          db_user = os.environ.get('SUPABASE_DB_USER')
           db_password = os.environ.get('SUPABASE_DB_PASSWORD')
 
-          if not db_host or not db_password:
+          if not db_password:
               print('⚠️ Database credentials not configured - skipping')
               print('   Add SUPABASE_DB_PASSWORD to repository secrets')
               exit(0)
@@ -121,15 +125,17 @@ jobs:
               print('⚠️ No sequences to write')
               exit(0)
 
-          print(f'📝 Connecting to database...')
+          print(f'📝 Connecting to database via pooler...')
+          print(f'   Host: {db_host}:{db_port}')
+          print(f'   User: {db_user}')
 
-          # Connect to PostgreSQL
+          # Connect to PostgreSQL via Supabase Pooler
           conn = psycopg2.connect(
               host=db_host,
               database='postgres',
-              user='postgres',
+              user=db_user,
               password=db_password,
-              port=5432,
+              port=db_port,
               sslmode='require'
           )
           conn.autocommit = True
