@@ -81,6 +81,9 @@ class NCBIFetcher:
         if segment in segment_terms:
             query_parts.append(segment_terms[segment])
         
+        # Filter for human host only (exclude avian, swine, etc.)
+        query_parts.append('"Homo sapiens"[Host]')
+        
         # Add region filter (countries in Asia) - use simpler OR syntax
         if region and region.lower() == "asia":
             asian_countries = [
