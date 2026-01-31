@@ -94,3 +94,23 @@ export function useRecentSequences(limit: number = 5) {
         staleTime: 1000 * 60, // 1 minute
     });
 }
+
+export function useAllSequences() {
+    return useQuery({
+        queryKey: ['sequences', 'all'],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('sequences')
+                .select('id, strain_name, collection_date, subtype, segment, sequence_length, created_at')
+                .order('created_at', { ascending: false })
+                .limit(100); // Limit for performance
+
+            if (error) {
+                throw new Error(error.message);
+            }
+
+            return data ?? [];
+        },
+        staleTime: 1000 * 60 * 2, // 2 minutes
+    });
+}

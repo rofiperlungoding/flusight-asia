@@ -216,3 +216,118 @@ jobs:
           name: sequence-data
           path: pipeline/sequences_data.json
           retention-days: 7
+
+      - name: 🧬 Detect Mutations
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          python << 'EOF'
+          import sys
+          sys.path.insert(0, 'src')
+          import os
+          import httpx
+          from flusight.processing import MutationDetector, get_mutation_summary
+
+          supabase_url = os.environ.get('SUPABASE_URL', '').rstrip('/')
+          supabase_key = os.environ.get('SUPABASE_SERVICE_KEY', '')
+
+          if not supabase_url or not supabase_key:
+              print('⚠️ Supabase secrets not configured - skipping')
+              exit(0)
+
+          rest_url = f'{supabase_url}/rest/v1'
+          headers = {
+              'apikey': supabase_key,
+              'Authorization': f'Bearer {supabase_key}',
+              'Content-Type': 'application/json',
+          }
+
+          # Fetch sequences that haven't been analyzed yet
+          print('📖 Fetching sequences for mutation analysis...')
+          response = httpx.get(
+              f'{rest_url}/sequences',
+              headers=headers,
+              params={
+                  'select': 'id,strain_name,raw_sequence',
+                  'order': 'created_at.desc',
+                  'limit': '50',
+              },
+              timeout=30.0,
+          )
+          
+          if response.status_code != 200:
+              print(f'❌ Failed to fetch sequences: {response.status_code}')
+              exit(1)
+          
+          sequences = response.json()
+          print(f'📋 Found {len(sequences)} sequences to analyze')
+
+          if not sequences:
+              print('ℹ️ No sequences to analyze')
+              exit(0)
+
+          # Get existing mutations to track novelty
+          print('📖 Fetching existing mutations...')
+          mut_response = httpx.get(
+              f'{rest_url}/mutations',
+              headers=headers,
+              params={'select': 'mutation_notation'},
+              timeout=30.0,
+          )
+          known_mutations = set()
+          if mut_response.status_code == 200:
+              known_mutations = {m['mutation_notation'] for m in mut_response.json()}
+          print(f'   Known mutations: {len(known_mutations)}')
+
+          # Initialize detector with known mutations
+          detector = MutationDetector(known_mutations=known_mutations)
+
+          # Process each sequence
+          total_mutations = 0
+          sequences_processed = 0
+          
+          for seq in sequences:
+              seq_id = seq['id']
+              raw_seq = seq.get('raw_sequence', '')
+              
+              if not raw_seq or len(raw_seq) < 100:
+                  continue
+              
+              # Detect mutations
+              mutations = detector.detect_mutations(raw_seq)
+              
+              if mutations:
+                  # Prepare records for insertion
+                  records = []
+                  for m in mutations:
+                      record = m.to_dict()
+                      record['sequence_id'] = seq_id
+                      records.append(record)
+                  
+                  # Upsert to mutations table
+                  try:
+                      upsert_headers = {**headers, 'Prefer': 'resolution=merge-duplicates,return=minimal'}
+                      response = httpx.post(
+                          f'{rest_url}/mutations',
+                          headers=upsert_headers,
+                          params={'on_conflict': 'sequence_id,position'},
+                          json=records,
+                          timeout=30.0,
+                      )
+                      
+                      if response.status_code in [200, 201, 204]:
+                          total_mutations += len(records)
+                          sequences_processed += 1
+                          print(f'  ✅ {seq["strain_name"][:40]}: {get_mutation_summary(mutations)}')
+                      else:
+                          print(f'  ⚠️ {seq["strain_name"][:30]}: HTTP {response.status_code}')
+                  except Exception as e:
+                      print(f'  ❌ Error: {e}')
+              else:
+                  sequences_processed += 1
+                  print(f'  ⚪ {seq["strain_name"][:40]}: No mutations')
+
+          print(f'')
+          print(f'📊 Mutation Analysis Complete:')
+          print(f'   Sequences analyzed: {sequences_processed}')
+          print(f'   Mutations detected: {total_mutations}')
+          EOF

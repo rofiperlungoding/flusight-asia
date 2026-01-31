@@ -21,14 +21,15 @@ export function Dashboard() {
                     </p>
                 </div>
                 <div className="flex space-x-3">
-                    <button className="btn-secondary bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                        Download Report
-                    </button>
                     <button
-                        className="btn-primary shadow-lg shadow-primary-500/20"
+                        className="btn-secondary"
                         onClick={() => window.location.reload()}
                     >
                         Refresh Data
+                    </button>
+                    <button className="btn-primary flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        Download Report
                     </button>
                 </div>
             </div>
@@ -82,13 +83,13 @@ export function Dashboard() {
                         color: 'text-purple-500'
                     },
                 ].map((stat, i) => (
-                    <div key={i} className="card hover:shadow-md transition-shadow duration-200 border-t-4 border-t-transparent hover:border-t-primary-500">
+                    <div key={i} className="card card-hover border-t-4 border-t-transparent hover:border-t-primary-500">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">{stat.label}</h3>
-                            <span className={`p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-xl ${stat.color}`}>{stat.icon}</span>
+                            <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 font-sans tracking-wide uppercase text-[11px]">{stat.label}</h3>
+                            <span className={`p-2.5 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-xl ${stat.color}`}>{stat.icon}</span>
                         </div>
-                        <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
-                        <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{stat.sub}</p>
+                        <p className="text-3xl font-bold text-slate-900 dark:text-white font-sans">{stat.value}</p>
+                        <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-medium">{stat.sub}</p>
                     </div>
                 ))}
             </div>
@@ -112,16 +113,22 @@ export function Dashboard() {
                 </div>
 
                 {/* Recent Sequences */}
-                <div className="card">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Recent Sequences</h3>
-                    <div className="space-y-3">
+                <div className="card h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold text-slate-900 dark:text-white">Recent Sequences</h3>
+                        <span className="text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 px-2 py-1 rounded-full">
+                            Latest 5
+                        </span>
+                    </div>
+
+                    <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                         {seqsLoading ? (
                             // Loading skeleton
                             [1, 2, 3, 4, 5].map((_, i) => (
-                                <div key={i} className="flex gap-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30 border border-gray-100 dark:border-gray-700/50">
+                                <div key={i} className="flex gap-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30 border border-slate-100 dark:border-slate-700/50">
                                     <div className="space-y-2 w-full">
-                                        <div className="h-2.5 bg-gray-200 dark:bg-gray-600 rounded w-3/4 animate-pulse"></div>
-                                        <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded w-1/2 animate-pulse"></div>
+                                        <div className="h-2.5 bg-slate-200 dark:bg-slate-600 rounded w-3/4 animate-pulse"></div>
+                                        <div className="h-2 bg-slate-200 dark:bg-slate-600 rounded w-1/2 animate-pulse"></div>
                                     </div>
                                 </div>
                             ))
@@ -130,29 +137,33 @@ export function Dashboard() {
                             recentSeqs.map((seq) => (
                                 <div
                                     key={seq.id}
-                                    className="flex gap-4 p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30 border border-gray-100 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                                    className="group flex gap-4 p-3 rounded-xl bg-slate-50/50 dark:bg-slate-700/20 border border-slate-100 dark:border-slate-700/30 hover:bg-white dark:hover:bg-slate-700/50 hover:shadow-md hover:shadow-slate-200/50 dark:hover:shadow-none hover:border-primary-200 dark:hover:border-primary-500/30 transition-all cursor-pointer"
                                 >
-                                    <div className="w-1.5 h-1.5 mt-2 rounded-full bg-primary-500 shrink-0"></div>
+                                    <div className="w-2 h-2 mt-2 rounded-full bg-primary-500 shrink-0 group-hover:scale-125 transition-transform"></div>
                                     <div className="space-y-1 overflow-hidden">
-                                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                                        <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
                                             {seq.strain_name}
                                         </p>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                                            {seq.collection_date ?? 'Unknown date'} • {seq.sequence_length}bp
-                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-mono">
+                                            <span>{seq.collection_date ?? 'Unknown date'}</span>
+                                            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                            <span>{seq.sequence_length}bp</span>
+                                        </div>
                                     </div>
                                 </div>
                             ))
                         ) : (
                             // Empty state
-                            <div className="text-center py-8 text-gray-400">
-                                <p className="text-sm">No sequences yet</p>
-                                <p className="text-xs mt-1">Run the pipeline to fetch data</p>
+                            <div className="text-center py-12 text-slate-400 dark:text-slate-500">
+                                <span className="text-4xl block mb-2">🧬</span>
+                                <p className="text-sm font-medium">No sequences found</p>
+                                <p className="text-xs mt-1 opacity-70">Run the pipeline to fetch data</p>
                             </div>
                         )}
                     </div>
+
                     <button
-                        className="w-full mt-6 py-2 text-sm text-primary-600 dark:text-primary-400 font-medium hover:text-primary-700 dark:hover:text-primary-300 transition-colors"
+                        className="w-full mt-6 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
                         onClick={() => window.location.href = '/sequences'}
                     >
                         View All Sequences →
