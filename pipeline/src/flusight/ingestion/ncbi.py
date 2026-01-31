@@ -70,33 +70,29 @@ class NCBIFetcher:
         # Base query for influenza A with specified subtype
         query_parts = [
             "Influenza A virus[Organism]",
-            f"({subtype}[Title] OR {subtype}[All Fields])",
+            f"{subtype}[All Fields]",
         ]
         
         # Add segment filter
         segment_terms = {
-            "HA": "(hemagglutinin[Title] OR HA[Title] OR segment 4[Title])",
-            "NA": "(neuraminidase[Title] OR NA[Title] OR segment 6[Title])",
+            "HA": "hemagglutinin[Title]",
+            "NA": "neuraminidase[Title]",
         }
         if segment in segment_terms:
             query_parts.append(segment_terms[segment])
         
-        # Add region filter (countries in Asia)
+        # Add region filter (countries in Asia) - use simpler OR syntax
         if region and region.lower() == "asia":
             asian_countries = [
-                "China", "Japan", "South Korea", "Taiwan", "Singapore",
+                "China", "Japan", "Korea", "Taiwan", "Singapore",
                 "Thailand", "Vietnam", "Malaysia", "Indonesia", "Philippines",
                 "India", "Bangladesh", "Hong Kong"
             ]
-            country_query = " OR ".join(f'"{c}"[All Fields]' for c in asian_countries)
+            country_query = " OR ".join(f'{c}[All Fields]' for c in asian_countries)
             query_parts.append(f"({country_query})")
         
-        # Add date filter
-        if min_date:
-            query_parts.append(f'{min_date}[PDAT] : 3000[PDAT]')
-        
-        # Filter for complete sequences only (reasonably long)
-        query_parts.append("1500:2000[SLEN]")  # HA gene is ~1700bp
+        # Filter for complete HA sequences (reasonably long, ~1700bp typical)
+        query_parts.append("1500:2000[SLEN]")
         
         return " AND ".join(query_parts)
     
