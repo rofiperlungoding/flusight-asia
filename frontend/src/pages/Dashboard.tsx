@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { useDashboardStats, useRecentSequences } from '../hooks';
+import { useDashboardStats, useRecentSequences, usePipelineLogs } from '../hooks';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '../lib/supabase';
 
 export function Dashboard() {
     const { data: stats, isLoading: statsLoading } = useDashboardStats();
     const { data: recentSeqs, isLoading: seqsLoading } = useRecentSequences(5);
+    const { data: logs, isLoading: logsLoading } = usePipelineLogs(5);
 
     const formatLastUpdated = (date: string | null) => {
         if (!date) return 'Never';
@@ -111,6 +112,63 @@ export function Dashboard() {
                         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-medium">{stat.sub}</p>
                     </div>
                 ))}
+            </div>
+
+            {/* Pipeline Status */}
+            <div className="card bg-slate-900 text-white overflow-hidden relative">
+                <div className="absolute top-0 right-0 p-4 opacity-10">
+                    <svg className="w-32 h-32" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                </div>
+                <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Live Pipeline Status
+                        </h3>
+                        <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-1 rounded border border-slate-700">
+                            Auto-sync: 6h
+                        </span>
+                    </div>
+
+                    <div className="space-y-4">
+                        {logsLoading ? (
+                            <div className="text-sm text-slate-400">Loading pipeline status...</div>
+                        ) : logs && logs.length > 0 ? (
+                            logs.map((log) => (
+                                <div key={log.id} className="flex items-start gap-4 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800 transition-colors">
+                                    <div className={`mt-1 p-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                        {log.status === 'success' ? (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                        ) : (
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-sm font-medium text-slate-200">
+                                                {log.job_name === 'ncbi_ingest' ? 'NCBI Data Ingestion' : log.job_name}
+                                            </p>
+                                            <span className="text-xs text-slate-500">
+                                                {formatDistanceToNow(new Date(log.started_at), { addSuffix: true })}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-1 truncate">
+                                            {log.message}
+                                        </p>
+                                        <div className="flex items-center gap-4 mt-2 text-[10px] text-slate-500 font-mono uppercase tracking-wider">
+                                            <span>Processed: {log.records_processed}</span>
+                                            <span>Errors: {log.records_failed}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-6 text-slate-500 text-sm">
+                                No pipeline logs available yet.
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* Main Content Grid */}
