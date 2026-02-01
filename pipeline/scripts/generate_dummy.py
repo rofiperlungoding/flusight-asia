@@ -21,11 +21,22 @@ def generate_dummy():
              
         v = np.random.choice(variants, p=probs)
         
+        # Pick country
+        countries = [
+            "China", "Japan", "South Korea", 
+            "Singapore", "Thailand", "Vietnam", 
+            "Indonesia", "India", "Malaysia", "Philippines"
+        ]
+        c = np.random.choice(countries)
+
+        
         dummy_seqs.append({
             'collection_date': d.strftime('%Y-%m-%d'),
             'mutations': [{'mutation_notation': v}], 
             'variant_signature': v,
-            'strain_name': f'Simulated/{v}/{d.strftime("%Y-%m-%d")}'
+            'strain_name': f'Simulated/{c}/{v}/{d.strftime("%Y-%m-%d")}',
+            'country': c
+
         })
         
     path = os.path.join(os.path.dirname(__file__), '..', 'sequences_data.json')

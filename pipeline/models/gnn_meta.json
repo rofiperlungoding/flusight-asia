@@ -1,0 +1,25 @@
+{
+  "nodes": [
+    "China",
+    "Japan",
+    "South Korea",
+    "Singapore",
+    "Thailand",
+    "Vietnam",
+    "Indonesia",
+    "India",
+    "Malaysia",
+    "Philippines"
+  ],
+  "variants": [
+    "Clade C",
+    "Clade B",
+    "Clade A",
+    "Clade D",
+    "Clade E"
+  ],
+  "input_len": 12,
+  "pred_len": 4,
+  "num_nodes": 10,
+  "num_variants": 6
+}

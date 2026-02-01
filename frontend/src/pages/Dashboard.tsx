@@ -3,7 +3,9 @@ import { useDashboardStats, useRecentSequences, usePipelineLogs } from '../hooks
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { ClusterMap } from '../components/Map/ClusterMap';
+import { SpreadMap } from '../components/Map/SpreadMap';
 import { TemporalTrendChart } from '../components/Charts/TemporalTrendChart';
+
 import { ForecastChart } from '../components/Charts/ForecastChart';
 import { VariantForecastChart } from '../components/Charts/VariantForecastChart';
 import { useForecasts } from '../hooks/useForecasts';
@@ -198,11 +200,24 @@ export function Dashboard() {
                 <div className="lg:col-span-2 card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-0 overflow-hidden relative h-[600px]">
                     <div className="absolute top-4 left-4 z-[1000] bg-white/90 dark:bg-slate-800/90 backdrop-blur px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
                         <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span className="text-lg">🗺️</span> Geographic Distribution
+                            <span className="text-lg">🗺️</span> Geographic Intelligence
                         </h3>
                     </div>
+                    {/* Placeholder for Toggle UI if we want to switch between Cluster and Spread. For now, showing SpreadMap below or replacing. 
+                        Let's put SpreadMap in a new section or replace ClusterMap temporarily to verify. 
+                        Actually, let's keep ClusterMap here and add SpreadMap as a new full-width section below.
+                    */}
                     <ClusterMap />
                 </div>
+
+                {/* 
+                   Wait, user wants PHASE 8 GNN Map. 
+                   Let's ADD the SpreadMap as a new Section at the bottom of the dashboard 
+                   or replace the ClusterMap if the intention is to upgrade.
+                   Phase 8 Plan implies "Spread Simulation" on dashboard.
+                   Let's add it as a new full-width card at the bottom.
+                */}
+
 
                 {/* Recent Sequences */}
                 <div className="card h-full flex flex-col">
@@ -310,6 +325,12 @@ export function Dashboard() {
                 <VariantForecastChart />
             </div>
 
+            {/* GNN Spread Simulation */}
+            <div className="card bg-slate-900 border border-slate-800 p-0 overflow-hidden">
+                <SpreadMap />
+            </div>
+
         </div>
     );
 }
+

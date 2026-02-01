@@ -69,21 +69,25 @@ class TimeseriesProcessor:
             
         return self.top_variants
 
-    def aggregate_weekly(self, smooth_window: int = 3) -> pd.DataFrame:
+    def aggregate_weekly(self, smooth_window: int = 3, target_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
         Aggregates sequences into a weekly frequency matrix.
-        Cols: [Variant_0, Variant_1, ..., Variant_K-1, Other]
-        Rows: ISO Weeks
-        Values: Normalized frequency (Sum = 1.0)
+        Args:
+            smooth_window: Weeks to smooth over.
+            target_df: Optional DataFrame to aggregate. Defaults to self.raw_df.
         """
-        if self.raw_df.empty:
+        df = target_df if target_df is not None else self.raw_df
+
+        if df.empty:
             return pd.DataFrame()
             
         if not self.top_variants:
             self._define_variants()
             
-        # Add 'iso_week' column
-        self.raw_df['iso_week'] = self.raw_df['collection_date'].dt.to_period('W').apply(lambda r: r.start_time)
+        # Add 'iso_week' column if not present (it might be since we operate on subset)
+        if 'iso_week' not in df.columns:
+            df = df.copy() # Avoid SettingWithCopy
+            df['iso_week'] = df['collection_date'].dt.to_period('W').apply(lambda r: r.start_time)
 
         # 1. Pivot Table: Count occurrences of each variant per week
         # First, map signatures to columns
@@ -92,9 +96,9 @@ class TimeseriesProcessor:
                 return sig
             return "Other"
             
-        self.raw_df['mapped_variant'] = self.raw_df['variant_signature'].apply(map_variant)
+        df['mapped_variant'] = df['variant_signature'].apply(map_variant)
         
-        counts = self.raw_df.pivot_table(
+        counts = df.pivot_table(
             index='iso_week', 
             columns='mapped_variant', 
             aggfunc='size', 
@@ -111,7 +115,17 @@ class TimeseriesProcessor:
         counts = counts[expected_cols]
         
         # 2. Resample to ensure all weeks are present (fill 0)
-        full_range = pd.date_range(start=self.raw_df['iso_week'].min(), end=self.raw_df['iso_week'].max(), freq='W-MON')
+        # Use simple global min/max or df specific? 
+        # For comparative spatial analysis, we might want a global range, 
+        # but for this method let's stick to df specific unless provided.
+        # Ideally, start/end should be configurable.
+        start_date = df['iso_week'].min()
+        end_date = df['iso_week'].max()
+        
+        if pd.isna(start_date) or pd.isna(end_date):
+             return pd.DataFrame()
+
+        full_range = pd.date_range(start=start_date, end=end_date, freq='W-MON')
         counts = counts.reindex(full_range, fill_value=0)
         
         # 3. Smoothing (Rolling Average)

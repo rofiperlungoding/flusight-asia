@@ -2,6 +2,9 @@
 
 from .mutation_detector import MutationDetector, Mutation, get_mutation_summary
 from .timeseries import TimeseriesProcessor
+from .geo_timeseries import GeoTimeseriesProcessor
+from .graph_topology import ASIA_GRAPH
+
 
 from .reference_strains import (
     H3N2_HA_REFERENCE,
@@ -21,5 +24,9 @@ __all__ = [
     "get_antigenic_site",
     "is_escape_mutation",
     "TimeseriesProcessor",
+    "GeoTimeseriesProcessor",
+    "ASIA_GRAPH",
 ]
+
+
 
