@@ -5,7 +5,9 @@ import { supabase } from '../lib/supabase';
 import { ClusterMap } from '../components/Map/ClusterMap';
 import { TemporalTrendChart } from '../components/Charts/TemporalTrendChart';
 import { ForecastChart } from '../components/Charts/ForecastChart';
+import { VariantForecastChart } from '../components/Charts/VariantForecastChart';
 import { useForecasts } from '../hooks/useForecasts';
+
 import { generatePDFReport } from '../utils/reportGenerator';
 
 export function Dashboard() {
@@ -291,6 +293,23 @@ export function Dashboard() {
                 </div>
                 <ForecastChart />
             </div>
+
+            {/* Variant Projections */}
+            <div className="card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-blue-500"><path d="M12 2L2 7l10 5 10-5-10-5zm0 9l2.5-1.25L12 8.5l-2.5 1.25L12 11zm0 2.5l-5-2.5-5 2.5L12 22l10-8.5-5-2.5-5 2.5z" /></svg>
+                </div>
+                <div className="flex items-center justify-between mb-6 relative z-10">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="text-xl">🧬</span> Competitive Variant Projection
+                    </h3>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-slate-500">Predicted Dominance (Next 12 Weeks)</span>
+                    </div>
+                </div>
+                <VariantForecastChart />
+            </div>
+
         </div>
     );
 }

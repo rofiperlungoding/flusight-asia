@@ -426,8 +426,24 @@ jobs:
         run: |
           pip install torch numpy pandas httpx pydantic python-dotenv supabase
 
-      - name: 🔮 Run Prediction
+      - name: 📥 Download sequence data
+        uses: actions/download-artifact@v4
+        with:
+          name: sequence-data
+          path: pipeline
+
+      - name: 🧠 Train Temporal Model
+        run: python scripts/train_transformer.py
+
+      - name: 🔮 Run Risk Prediction (Base)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/predict.py
+
+      - name: 🔮 Run Temporal Prediction (Transformer)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/predict_temporal.py
+
