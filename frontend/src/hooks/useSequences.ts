@@ -162,11 +162,11 @@ export function useSequenceById(id: string) {
 }
 
 const MOCK_RECENT_SEQUENCES = [
-    { id: 'seq-1', strain_name: 'A/Thailand/123/2025', collection_date: '2025-01-15', sequence_length: 1701, created_at: new Date().toISOString() },
-    { id: 'seq-2', strain_name: 'A/Vietnam/456/2025', collection_date: '2025-01-14', sequence_length: 1698, created_at: new Date(Date.now() - 86400000).toISOString() },
-    { id: 'seq-3', strain_name: 'A/Cambodia/789/2025', collection_date: '2025-01-12', sequence_length: 1701, created_at: new Date(Date.now() - 86400000 * 2).toISOString() },
-    { id: 'seq-4', strain_name: 'A/Laos/101/2025', collection_date: '2025-01-10', sequence_length: 1705, created_at: new Date(Date.now() - 86400000 * 3).toISOString() },
-    { id: 'seq-5', strain_name: 'A/Indonesia/202/2025', collection_date: '2025-01-08', sequence_length: 1695, created_at: new Date(Date.now() - 86400000 * 4).toISOString() },
+    { id: 'seq-1', strain_name: 'A/Thailand/123/2025', collection_date: '2025-01-15', sequence_length: 1701, created_at: new Date().toISOString(), subtype: 'H3N2', segment: 'HA' },
+    { id: 'seq-2', strain_name: 'A/Vietnam/456/2025', collection_date: '2025-01-14', sequence_length: 1698, created_at: new Date(Date.now() - 86400000).toISOString(), subtype: 'H3N2', segment: 'HA' },
+    { id: 'seq-3', strain_name: 'A/Cambodia/789/2025', collection_date: '2025-01-12', sequence_length: 1701, created_at: new Date(Date.now() - 86400000 * 2).toISOString(), subtype: 'H3N2', segment: 'HA' },
+    { id: 'seq-4', strain_name: 'A/Laos/101/2025', collection_date: '2025-01-10', sequence_length: 1705, created_at: new Date(Date.now() - 86400000 * 3).toISOString(), subtype: 'H3N2', segment: 'HA' },
+    { id: 'seq-5', strain_name: 'A/Indonesia/202/2025', collection_date: '2025-01-08', sequence_length: 1695, created_at: new Date(Date.now() - 86400000 * 4).toISOString(), subtype: 'H3N2', segment: 'HA' },
 ];
 
 export function useRecentSequences(limit: number = 5) {
