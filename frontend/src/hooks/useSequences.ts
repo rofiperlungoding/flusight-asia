@@ -202,7 +202,7 @@ export function useAllSequences() {
                     .from('sequences')
                     .select('id, strain_name, collection_date, subtype, segment, sequence_length, created_at')
                     .order('created_at', { ascending: false })
-                    .limit(100);
+                    .limit(10000);
 
                 if (error || !data || data.length === 0) {
                     return MOCK_RECENT_SEQUENCES;

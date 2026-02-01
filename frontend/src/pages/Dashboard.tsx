@@ -55,24 +55,65 @@ export function Dashboard() {
                     </button>
                     <button
                         className="btn-primary flex items-center gap-2"
+                        // Import xlsx dynamically or use if imported at top. 
+                        // Since we cannot easily add top-level imports with replace_file_content unless we replace the header, 
+                        // We will rely on the fact that we can do `import(...)` or we should add the import at the top first.
+                        // However, adding import at top is safer. 
+                        // Let's assume we will add the import in a separate step or try to use inline require if environment supports it (Vite usually supports dynamic import).
+                        // Better: Replace the whole button onClick logic.
+
                         onClick={async () => {
-                            // Generate CSV report
-                            const { data } = await supabase.from('sequences').select('strain_name, genbank_id, collection_date, sequence_length, source').limit(1000);
-                            if (data && data.length > 0) {
-                                const headers = Object.keys(data[0]).join(',');
-                                const rows = data.map(row => Object.values(row).join(','));
-                                const csv = [headers, ...rows].join('\n');
-                                const blob = new Blob([csv], { type: 'text/csv' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `flusight-report-${new Date().toISOString().split('T')[0]}.csv`;
-                                a.click();
+                            try {
+                                const { utils, writeFile } = await import("xlsx");
+
+                                // Fetch data (limit 10000 as requested)
+                                const { data } = await supabase
+                                    .from('sequences')
+                                    .select('strain_name, genbank_id, collection_date, subtype, segment, sequence_length, host, source, created_at')
+                                    .limit(10000)
+                                    .order('collection_date', { ascending: false });
+
+                                if (!data || data.length === 0) {
+                                    alert("No data available to export.");
+                                    return;
+                                }
+
+                                // Format data for Excel
+                                const formattedData = data.map(item => ({
+                                    "Strain Name": item.strain_name,
+                                    "GenBank ID": item.genbank_id,
+                                    "Collection Date": item.collection_date || "Unknown",
+                                    "Subtype": item.subtype,
+                                    "Segment": item.segment,
+                                    "Length (bp)": item.sequence_length,
+                                    "Host": item.host,
+                                    "Source": item.source,
+                                    "Added To System": new Date(item.created_at).toLocaleDateString()
+                                }));
+
+                                // Create Workbook
+                                const wb = utils.book_new();
+                                const ws = utils.json_to_sheet(formattedData);
+
+                                // Auto-width columns (simple heuristic)
+                                const colWidths = Object.keys(formattedData[0]).map(key => ({
+                                    wch: Math.max(key.length, ...formattedData.map(row => String(row[key as keyof typeof row] || "").length)) + 2
+                                }));
+                                ws['!cols'] = colWidths;
+
+                                utils.book_append_sheet(wb, ws, "Sequences");
+
+                                // Save file
+                                writeFile(wb, `flusight-asi-export-${new Date().toISOString().split('T')[0]}.xlsx`);
+
+                            } catch (e) {
+                                console.error("Export failed", e);
+                                alert("Failed to export data. Please check console.");
                             }
                         }}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Report
+                        Download Excel (10k)
                     </button>
                 </div>
             </div>

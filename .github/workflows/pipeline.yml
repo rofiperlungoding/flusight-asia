@@ -2,8 +2,8 @@ name: FluSight Data Pipeline
 
 on:
   schedule:
-    # Run every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
-    - cron: '0 */6 * * *'
+    # Run every 3 hours
+    - cron: '0 */3 * * *'
   workflow_dispatch:
     inputs:
       max_sequences:
@@ -58,10 +58,12 @@ jobs:
 
           email = os.environ.get('NCBI_EMAIL')
           api_key = os.environ.get('NCBI_API_KEY')
-          max_sequences = int('${{ github.event.inputs.max_sequences }}' or '100')
+          # Default to 10000 if not specified (e.g. schedule trigger)
+          max_sequences = int('${{ github.event.inputs.max_sequences }}' or '10000')
 
           print(f'📧 NCBI Email: {email[:5]}***')
           print(f'🔢 Max sequences: {max_sequences}')
+
 
           fetcher = NCBIFetcher(email=email, api_key=api_key)
           query = fetcher.build_search_query(subtype='H3N2', segment='HA', region='Asia')
@@ -324,7 +326,7 @@ jobs:
               params={
                   'select': 'id,strain_name,raw_sequence',
                   'order': 'created_at.desc',
-                  'limit': '50',
+                  'limit': '10000',
               },
               timeout=30.0,
           )

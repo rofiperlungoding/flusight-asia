@@ -1,9 +1,50 @@
+
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAllSequences } from '../hooks';
 
 export function Sequences() {
     const navigate = useNavigate();
     const { data: sequences, isLoading, error } = useAllSequences();
+
+    // Client-side pagination state
+    const [page, setPage] = useState(1);
+    const pageSize = 50; // Render 50 at a time to keep UI responsive
+
+    const totalPages = sequences ? Math.ceil(sequences.length / pageSize) : 0;
+    const paginatedSequences = sequences ? sequences.slice((page - 1) * pageSize, page * pageSize) : [];
+
+    const handleExport = async () => {
+        try {
+            const { utils, writeFile } = await import("xlsx");
+            if (!sequences || sequences.length === 0) return;
+
+            // Format data
+            const formattedData = sequences.map(item => ({
+                "Strain Name": item.strain_name,
+                "Collection Date": item.collection_date || "Unknown",
+                "Subtype": item.subtype,
+                "Segment": item.segment,
+                "Length (bp)": item.sequence_length,
+                "Added At": new Date(item.created_at).toLocaleDateString()
+            }));
+
+            const wb = utils.book_new();
+            const ws = utils.json_to_sheet(formattedData);
+
+            // Auto-width
+            const colWidths = Object.keys(formattedData[0]).map(key => ({
+                wch: Math.max(key.length, ...formattedData.map(row => String(row[key as keyof typeof row] || "").length)) + 2
+            }));
+            ws['!cols'] = colWidths;
+
+            utils.book_append_sheet(wb, ws, "Sequences");
+            writeFile(wb, `sequences_export_${new Date().toISOString().split('T')[0]}.xlsx`);
+        } catch (e) {
+            console.error("Export failed", e);
+            alert("Export failed");
+        }
+    };
 
     return (
         <div className="space-y-6 animate-fade-in">
@@ -12,11 +53,16 @@ export function Sequences() {
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Sequence Explorer</h1>
                     <p className="mt-2 text-slate-500 dark:text-slate-400">
                         Browse and analyze H3N2 hemagglutinin sequences.
+                        {sequences && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs">{sequences.length} loaded</span>}
                     </p>
                 </div>
-                <button className="btn-primary flex items-center gap-2">
+                <button
+                    className="btn-primary flex items-center gap-2"
+                    onClick={handleExport}
+                    disabled={!sequences || sequences.length === 0}
+                >
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    Export Data
+                    Export Data (XLSX)
                 </button>
             </div>
 
@@ -51,8 +97,8 @@ export function Sequences() {
                                         Error loading sequences
                                     </td>
                                 </tr>
-                            ) : sequences && sequences.length > 0 ? (
-                                sequences.map((seq) => (
+                            ) : paginatedSequences && paginatedSequences.length > 0 ? (
+                                paginatedSequences.map((seq) => (
                                     <tr
                                         key={seq.id}
                                         className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
@@ -93,11 +139,24 @@ export function Sequences() {
                 </div>
                 <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <span className="text-sm text-slate-500">
-                        {sequences ? `Showing ${sequences.length} sequences` : 'Loading...'}
+                        {sequences ? `Showing ${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, sequences.length)} of ${sequences.length} sequences` : 'Loading...'}
                     </span>
                     <div className="flex gap-2">
-                        <button disabled className="px-3 py-1 text-sm border rounded bg-white dark:bg-slate-800 text-slate-400 cursor-not-allowed">Previous</button>
-                        <button disabled className="px-3 py-1 text-sm border rounded bg-white dark:bg-slate-800 text-slate-400 cursor-not-allowed">Next</button>
+                        <button
+                            disabled={page === 1}
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            className="px-3 py-1 text-sm border rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Previous
+                        </button>
+                        <span className="px-3 py-1 text-sm text-slate-500">Page {page} of {totalPages}</span>
+                        <button
+                            disabled={page === totalPages}
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            className="px-3 py-1 text-sm border rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Next
+                        </button>
                     </div>
                 </div>
             </div>
