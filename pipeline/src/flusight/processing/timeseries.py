@@ -34,38 +34,41 @@ class TimeseriesProcessor:
         if self.raw_df.empty:
             return []
             
-        # Create a 'signature' string for each sequence
-        # We need to assume 'mutations' is a list of mutation strings or objects
-        # IF mutations are not pre-calculated, we might need to rely on 'clade' or similar
-        # For now, let's assume 'mutations' field exists or we create a hashable signature
-        
-        signatures = []
-        for _, row in self.raw_df.iterrows():
-            muts = row.get('mutations', [])
-            if isinstance(muts, list):
-                # Sort mutations to ensure consistent signature
-                # If mutations are dicts, extract notation. If strings, just sort.
-                mut_strs = sorted([m if isinstance(m, str) else m.get('mutation_notation', '') for m in muts])
-                sig = ",".join(mut_strs)
-                if not sig: sig = "WT" # Wild Type / No mutations relative to ref
-            else:
-                sig = "Unknown"
-            signatures.append(sig)
-            
-        self.raw_df['variant_signature'] = signatures
+        # Ensure variant_signature exists
+        if 'variant_signature' not in self.raw_df.columns:
+            signatures = []
+            for _, row in self.raw_df.iterrows():
+                muts = row.get('mutations', [])
+                # Handle various mutation formats (dicts from API or raw strings)
+                if isinstance(muts, list):
+                    processed_muts = []
+                    for m in muts:
+                         if isinstance(m, dict):
+                             processed_muts.append(m.get('mutation_notation', ''))
+                         elif isinstance(m, str):
+                             processed_muts.append(m)
+                    
+                    # Sort and join
+                    sig = ",".join(sorted([m for m in processed_muts if m]))
+                    if not sig: sig = "WT" 
+                else:
+                    sig = "Unknown"
+                signatures.append(sig)
+                
+            self.raw_df['variant_signature'] = signatures
         
         # Count frequencies
-        counts = collections.Counter(signatures)
+        counts = collections.Counter(self.raw_df['variant_signature'])
         
         # Get top K
         self.top_variants = [sig for sig, count in counts.most_common(top_k)]
         
-        # Create mapping: Variant -> Index (0 to K-1). K is 'Other'
+        # Create mapping
         self.variant_map = {sig: i for i, sig in enumerate(self.top_variants)}
         
         print(f"✅ Identified Top {len(self.top_variants)} Variants:")
-        for v in self.top_variants:
-            print(f"   - {v[:50]}..." if len(v) > 50 else f"   - {v}")
+        # for v in self.top_variants:
+        #     print(f"   - {v[:50]}..." if len(v) > 50 else f"   - {v}")
             
         return self.top_variants
 
@@ -96,7 +99,36 @@ class TimeseriesProcessor:
                 return sig
             return "Other"
             
-        df['mapped_variant'] = df['variant_signature'].apply(map_variant)
+        # Ensure variant_signature column exists in the target df
+        if 'variant_signature' not in df.columns:
+            # If we are using self.raw_df, it should have been created in _define_variants
+            # If df is a subset or new df, we need to regenerate signatures
+            # Reuse _define_variants logic but just for column creation if top_variants is already set?
+            # Simpler: just call _define_variants() which is idempotent-ish or create a helper.
+            # For now, let's just trigger _define_variants if the main raw_df doesn't have it, 
+            # Or manually apply the signature logic if operating on a copy.
+            
+            # FAST FIX: ensure we only run this if necessary
+            if self.raw_df is df and 'variant_signature' in self.raw_df:
+                 pass 
+            else:
+                 # Re-run signature generation for this dataframe
+                 signatures = []
+                 for _, row in df.iterrows():
+                    muts = row.get('mutations', [])
+                    if isinstance(muts, list):
+                        processed = []
+                        for m in muts:
+                             if isinstance(m, dict): processed.append(m.get('mutation_notation', ''))
+                             elif isinstance(m, str): processed.append(m)
+                        sig = ",".join(sorted([p for p in processed if p])) or "WT"
+                    else:
+                        sig = "Unknown"
+                    signatures.append(sig)
+                 df['mapped_variant'] = [s if s in self.top_variants else "Other" for s in signatures]
+
+        if 'mapped_variant' not in df.columns and 'variant_signature' in df.columns:
+             df['mapped_variant'] = df['variant_signature'].apply(map_variant)
         
         counts = df.pivot_table(
             index='iso_week', 
