@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import sys
+import os
+
+# Add src to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
 from flusight.ml.data_loader import fetch_training_data
 from flusight.ml.tokenizer import SequenceTokenizer
 from flusight.ml.models import MutationLSTM

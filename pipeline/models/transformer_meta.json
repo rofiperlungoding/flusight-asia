@@ -1,1 +1,1 @@
-{"variants": ["Clade B", "Clade A", "Clade C", "Clade D", "Clade E"], "variant_map": {"Clade B": 0, "Clade A": 1, "Clade C": 2, "Clade D": 3, "Clade E": 4}, "input_len": 52, "pred_len": 12, "num_variants": 6}
+{"variants": ["Clade C", "Clade B", "Clade A", "Clade D", "Clade E"], "variant_map": {"Clade C": 0, "Clade B": 1, "Clade A": 2, "Clade D": 3, "Clade E": 4}, "input_len": 52, "pred_len": 12, "num_variants": 6}

@@ -7,6 +7,11 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 
+# Add src to path
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+
 from flusight.ml.tokenizer import SequenceTokenizer
 from flusight.ml.models import MutationLSTM
 from flusight.processing.reference_strains import translate_sequence
