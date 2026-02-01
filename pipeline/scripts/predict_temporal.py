@@ -128,7 +128,7 @@ def predict_temporal():
             f"{supabase_url}/rest/v1/variant_forecasts",
             headers=headers,
             json=forecast_records,
-            timeout=10.0
+            timeout=60.0
         )
         if resp.status_code in [200, 201, 204]:
             logging.info("✅ Predictions saved successfully.")

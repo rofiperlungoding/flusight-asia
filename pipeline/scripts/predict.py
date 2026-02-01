@@ -168,7 +168,7 @@ def predict_future_risk():
                 f"{rest_url}/forecasts",
                 headers=headers,
                 json=forecast_entry,
-                timeout=10.0
+                timeout=60.0
             )
             if resp.status_code in [200, 201]:
                  logging.info("  -> Saved.")

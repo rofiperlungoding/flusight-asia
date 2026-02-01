@@ -207,7 +207,7 @@ jobs:
                       headers=headers,
                       params={'on_conflict': 'genbank_id'},
                       json=records,
-                      timeout=60.0,
+                      timeout=120.0,
                   )
                   
                   if response.status_code in [200, 201, 204]:
