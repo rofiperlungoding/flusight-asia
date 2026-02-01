@@ -19,7 +19,9 @@ def train():
     NUM_LAYERS = 2
     DROPOUT = 0.2
     LEARNING_RATE = 0.001
-    EPOCHS = 10000
+    LEARNING_RATE = 0.001
+    EPOCHS = int(os.environ.get('EPOCHS', 10000))
+    print(f"Training for {EPOCHS} epochs")
     
     print("Step 1: Fetching training data...")
     try:

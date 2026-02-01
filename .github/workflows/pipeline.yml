@@ -437,7 +437,15 @@ jobs:
       - name: 🧠 Train Temporal Model
         run: python scripts/train_transformer.py
 
-      - name: 🔮 Run Risk Prediction (Base)
+      - name: 🧠 Train LSTM Model
+        env:
+            EPOCHS: '20' # Short training for CI/CD
+        run: python scripts/train_lstm.py
+      
+      - name: 🧠 Train GNN Model
+        run: python scripts/train_gnn.py
+
+      - name: 🔮 Run Risk Prediction (LSTM)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -448,4 +456,10 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python scripts/predict_temporal.py
+
+      - name: 🌍 Run Geographic Spread Prediction (GNN)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/predict_spread.py
 
