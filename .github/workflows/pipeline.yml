@@ -191,10 +191,8 @@ jobs:
                       'sequence_length': seq.get('sequence_length') or len(seq.get('raw_sequence', '')),
                       'host': seq.get('host', 'Human'),
                       'source': 'ncbi',
+                      'collection_date': seq.get('collection_date') # Always fetch, results in None if missing
                   }
-                  # Add collection_date only if present
-                  if seq.get('collection_date'):
-                      record['collection_date'] = seq.get('collection_date')
                   
                   records.append(record)
               
