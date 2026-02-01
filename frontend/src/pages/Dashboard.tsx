@@ -4,11 +4,21 @@ import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { ClusterMap } from '../components/Map/ClusterMap';
 import { TemporalTrendChart } from '../components/Charts/TemporalTrendChart';
+import { ForecastChart } from '../components/Charts/ForecastChart';
+import { useForecasts } from '../hooks/useForecasts';
+import { generatePDFReport } from '../utils/reportGenerator';
 
 export function Dashboard() {
     const { data: stats, isLoading: statsLoading } = useDashboardStats();
     const { data: recentSeqs, isLoading: seqsLoading } = useRecentSequences(5);
     const { data: logs, isLoading: logsLoading } = usePipelineLogs(5);
+    const { data: forecasts } = useForecasts();
+
+    const handleGeneratePDF = () => {
+        if (stats) {
+            generatePDFReport({ stats, forecasts });
+        }
+    };
 
     const formatLastUpdated = (date: string | null) => {
         if (!date) return 'Never';
@@ -17,7 +27,7 @@ export function Dashboard() {
 
     return (
         <div className="space-y-8 animate-fade-in">
-            {/* Page header */}
+            {/* Dashboard V2 - Live Update */}
             <div className="flex items-end justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Dashboard Overview</h1>
@@ -26,6 +36,13 @@ export function Dashboard() {
                     </p>
                 </div>
                 <div className="flex space-x-3">
+                    <button
+                        className="btn-secondary flex items-center gap-2"
+                        onClick={handleGeneratePDF}
+                        disabled={!stats}
+                    >
+                        <span>📄</span> PDF Report
+                    </button>
                     <button
                         className="btn-secondary"
                         onClick={() => window.location.reload()}
@@ -256,6 +273,23 @@ export function Dashboard() {
                     </div>
                 </div>
                 <TemporalTrendChart />
+            </div>
+
+            {/* Predictive Forecast */}
+            <div className="card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                    <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-rose-500"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5Zm0 0a10 10 0 0 1 10 10H12Z" /></svg>
+                </div>
+                <div className="flex items-center justify-between mb-6 relative z-10">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        <span className="text-xl">🔮</span> Predictive Risk Analysis (Next 3 Months)
+                    </h3>
+                    <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full bg-rose-500"></span>
+                        <span className="text-sm text-slate-500">Predicted Risk Score</span>
+                    </div>
+                </div>
+                <ForecastChart />
             </div>
         </div>
     );

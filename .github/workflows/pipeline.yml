@@ -402,7 +402,32 @@ jobs:
                   print(f'  ⚪ {seq["strain_name"][:40]}: No mutations')
 
           print(f'')
-          print(f'📊 Mutation Analysis Complete:')
-          print(f'   Sequences analyzed: {sequences_processed}')
           print(f'   Mutations detected: {total_mutations}')
           EOF
+
+  predict-trends:
+    name: 🔮 Predict Future Trends
+    needs: ingest-sequences
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pipeline
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install torch numpy pandas httpx pydantic python-dotenv supabase
+
+      - name: 🔮 Run Prediction
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scripts/predict.py
