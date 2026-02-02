@@ -7,7 +7,7 @@ import { useVariantForecasts } from '../hooks/useVariantForecasts';
 import { format } from 'date-fns';
 
 export function Predictions() {
-    const [viewMode, setViewMode] = useState<'graph' | 'table'>('graph');
+    const [viewMode, setViewMode] = useState<'graph' | 'table' | 'map'>('graph');
 
     // Fetch data handles for Table view
     const { data: riskData } = useForecasts();
@@ -33,12 +33,18 @@ export function Predictions() {
                         onClick={() => setViewMode('graph')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'graph' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
                     >
-                        Graph
+                        Models
+                    </button>
+                    <button
+                        onClick={() => setViewMode('map')}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${viewMode === 'map' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+                    >
+                        Spread Map
                     </button>
                 </div>
             </div>
 
-            {viewMode === 'graph' ? (
+            {viewMode === 'graph' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* H3N2 Antigenic Risk Model (LSTM) */}
                     <div className="card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
@@ -91,7 +97,9 @@ export function Predictions() {
                         </div>
                     </div>
                 </div>
-            ) : (
+            )}
+
+            {viewMode === 'table' && (
                 <div className="space-y-8 animate-fade-in">
                     {/* Table View */}
                     <div className="card overflow-hidden p-0 border border-slate-200 dark:border-slate-700">
@@ -176,6 +184,73 @@ export function Predictions() {
                     </div>
                 </div>
             )}
+
+            {viewMode === 'map' && <LinkSpreadMap />}
         </div>
     );
+}
+
+// Sub-component to isolate Map logic and hooks
+import { SpreadMap } from '../components/Map/SpreadMap';
+import { useGeoForecasts } from '../hooks/useGeoForecasts';
+
+function LinkSpreadMap() {
+    const { data: geoData, isLoading } = useGeoForecasts();
+    const [sliderIndex, setSliderIndex] = useState(0);
+
+    // Group data by date
+    const uniqueDates = Array.from(new Set(geoData?.map(d => d.forecast_date) || [])).sort();
+
+    // Filter data for current slider position
+    const currentDate = uniqueDates[sliderIndex];
+    const currentData = geoData?.filter(d => d.forecast_date === currentDate) || [];
+
+    if (isLoading) return <div className="p-12 text-center text-slate-500">Loading geospatial data...</div>;
+    if (!geoData || geoData.length === 0) return (
+        <div className="card border-dashed border-2 border-slate-300 p-12 text-center">
+            <h3 className="text-lg font-medium text-slate-900">No Geographic Forecasts Yet</h3>
+            <p className="text-slate-500 mt-2">The GNN model pipeline has not generated spatial predictions yet. Please run the pipeline.</p>
+        </div>
+    );
+
+    return (
+        <div className="space-y-6 animate-fade-in">
+            <div className="card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <div className="flex flex-col md:flex-row items-center justify-between mb-6 gap-4">
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span className="text-xl">🌏</span> Geographic Spread Simulation
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1">Spatiotemporal GNN • Prediction of variant flow across Asia.</p>
+                    </div>
+                    {/* Time Slider */}
+                    <div className="w-full md:w-1/2 bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
+                        <div className="flex justify-between text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                            <span>{uniqueDates[0]}</span>
+                            <span className="text-primary-600">Selected: {currentDate}</span>
+                            <span>{uniqueDates[uniqueDates.length - 1]}</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="0"
+                            max={uniqueDates.length - 1}
+                            value={sliderIndex}
+                            onChange={(e) => setSliderIndex(parseInt(e.target.value))}
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                        />
+                        <div className="text-center mt-1 text-[10px] text-slate-400">
+                            Slide to see future weeks (+ {sliderIndex + 1} weeks)
+                        </div>
+                    </div>
+                </div>
+
+                <SpreadMap data={currentData} />
+
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-100 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
+                    <strong>💡 How to read:</strong> Each circle represents a country. The color indicates the predicted
+                    <em> dominant variant</em> for that week. Click on a circle to see the full probability breakdown.
+                </div>
+            </div>
+        </div>
+    )
 }

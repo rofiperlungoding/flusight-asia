@@ -1,191 +1,102 @@
-
-import { useState, useMemo } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useGeoForecasts, type GeoForecast } from '../../hooks/useGeoForecasts';
+import type { GeoForecast } from '../../hooks/useGeoForecasts';
 
-import { format } from 'date-fns';
-
-// Static Centroids for Asian Countries
+// Centroids for our target Asian countries
 const COUNTRY_CENTROIDS: Record<string, [number, number]> = {
     "China": [35.8617, 104.1954],
     "Japan": [36.2048, 138.2529],
     "South Korea": [35.9078, 127.7669],
+    "Korea": [35.9078, 127.7669], // Alias
+    "Taiwan": [23.6978, 120.9605],
     "Singapore": [1.3521, 103.8198],
     "Thailand": [15.8700, 100.9925],
     "Vietnam": [14.0583, 108.2772],
-    "Indonesia": [-0.7893, 113.9213],
-    "India": [20.5937, 78.9629],
     "Malaysia": [4.2105, 101.9758],
-    "Philippines": [12.8797, 121.7740]
+    "Indonesia": [-0.7893, 113.9213],
+    "Philippines": [12.8797, 121.7740],
+    "India": [20.5937, 78.9629],
+    "Bangladesh": [23.6850, 90.3563],
+    "Hong Kong": [22.3193, 114.1694]
 };
 
-// Travel Edges for Visualization (matching graph topology)
-const EDGES: [string, string][] = [
-    ["China", "Japan"], ["China", "South Korea"], ["China", "Thailand"],
-    ["Japan", "South Korea"],
-    ["Singapore", "Thailand"], ["Singapore", "Indonesia"], ["Singapore", "Malaysia"],
-    ["Malaysia", "Thailand"], ["Thailand", "Vietnam"], ["Vietnam", "China"],
-    ["India", "Singapore"], ["Philippines", "Singapore"]
-];
-
+// Color palette for variants - keep consistent with charts
 const VARIANT_COLORS: Record<string, string> = {
-    "Clade A": "#ef4444", // Red
-    "Clade B": "#f97316", // Orange
-    "Clade C": "#eab308", // Yellow
-    "Clade D": "#22c55e", // Green
-    "Clade E": "#3b82f6", // Blue
-    "Other": "#94a3b8"   // Slate
+    'H3N2': '#3b82f6', // blue-500
+    'H1N1': '#ef4444', // red-500
+    'Yamagata': '#10b981', // emerald-500
+    'Victoria': '#f59e0b', // amber-500
+    'Other': '#64748b' // slate-500
 };
 
-export function SpreadMap() {
-    const { data: forecasts, isLoading } = useGeoForecasts();
-    const [sliderIndex, setSliderIndex] = useState(0);
+// Helper to get color for dominant variant
+const getDominantColor = (dist: Record<string, number>) => {
+    let max = -1;
+    let dominant = 'Other';
 
-    // 1. Group forecasts by Date
-    const uniqueDates = useMemo(() => {
-        if (!forecasts) return [];
-        const dates = Array.from(new Set(forecasts.map(f => f.forecast_date))).sort();
-        return dates;
-    }, [forecasts]);
+    Object.entries(dist).forEach(([variant, prob]) => {
+        if (prob > max) {
+            max = prob;
+            dominant = variant;
+        }
+    });
 
-    // 2. Get current timeframe data
-    const currentFrameData = useMemo(() => {
-        if (!forecasts || uniqueDates.length === 0) return [];
-        const date = uniqueDates[sliderIndex];
-        return forecasts.filter(f => f.forecast_date === date);
-    }, [forecasts, uniqueDates, sliderIndex]);
+    // Hash string to color fallback if not in palette
+    if (!VARIANT_COLORS[dominant]) {
+        return '#8b5cf6'; // violet-500 default for new variants
+    }
+    return VARIANT_COLORS[dominant];
+};
 
-    // 3. Helper to determine dominant variant color and radius
-    const getMarkerStyle = (forecast: GeoForecast) => {
-        const dist = forecast.variant_distribution;
-        let maxVar = "Other";
-        let maxVal = 0;
+interface SpreadMapProps {
+    data: GeoForecast[];
+}
 
-        Object.entries(dist).forEach(([k, v]) => {
-            if (v > maxVal) {
-                maxVal = v;
-                maxVar = k;
-            }
-        });
-
-        // Radius based on "Entropy" or just max dominance? 
-        // Let's size by maxVal (certainty)
-        return {
-            color: VARIANT_COLORS[maxVar] || "#64748b",
-            radius: 10 + (maxVal * 20), // 10 to 30px
-            fillOpacity: 0.6,
-            dominant: maxVar
-        };
-    };
-
-    if (isLoading) return <div className="h-[500px] flex items-center justify-center bg-slate-50 dark:bg-slate-900 rounded-xl">Loading simulation...</div>;
-    if (!forecasts || forecasts.length === 0) return <div className="h-[500px] flex items-center justify-center">No GNN forecasts available.</div>;
-
-    const currentDate = uniqueDates[sliderIndex];
-
+export function SpreadMap({ data }: SpreadMapProps) {
     return (
-        <div className="card h-[600px] flex flex-col p-0 overflow-hidden relative border border-slate-200 dark:border-slate-700 bg-slate-900">
-            {/* Map Header / Controls */}
-            <div className="absolute top-4 left-4 z-[500] bg-slate-900/90 backdrop-blur border border-slate-700 p-4 rounded-xl shadow-xl w-72">
-                <h3 className="text-white font-bold flex items-center gap-2 mb-2">
-                    <span className="text-xl">🕸️</span> Viral Flow Simulation
-                </h3>
-                <p className="text-xs text-slate-400 mb-4">
-                    GNN-predicted dominance spread across Asia.
-                </p>
-
-                <div className="space-y-2">
-                    <div className="flex justify-between text-xs font-mono text-cyan-400">
-                        <span>Forecast Week:</span>
-                        <span>{format(new Date(currentDate), 'MMM d, yyyy')}</span>
-                    </div>
-
-                    <input
-                        type="range"
-                        min={0}
-                        max={uniqueDates.length - 1}
-                        value={sliderIndex}
-                        onChange={(e) => setSliderIndex(parseInt(e.target.value))}
-                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                    />
-
-                    <div className="flex justify-between text-[10px] text-slate-500">
-                        <span>Now</span>
-                        <span>+4 Weeks</span>
-                    </div>
-                </div>
-
-                {/* Legend */}
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                    {Object.entries(VARIANT_COLORS).map(([v, c]) => (
-                        <div key={v} className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: c }}></span>
-                            <span className="text-[10px] text-slate-300">{v}</span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
+        <div className="w-full h-[600px] rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm relative z-0">
             <MapContainer
-                center={[20, 110]}
+                center={[20, 100]} // Center on Asia
                 zoom={4}
+                scrollWheelZoom={true}
                 style={{ height: '100%', width: '100%' }}
-                className="bg-slate-900"
+                className="z-0"
             >
                 <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                    url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
                 />
 
-                {/* Draw Edges */}
-                {EDGES.map(([u, v], i) => {
-                    const p1 = COUNTRY_CENTROIDS[u];
-                    const p2 = COUNTRY_CENTROIDS[v];
-                    if (p1 && p2) {
-                        return <Polyline key={i} positions={[p1, p2]} color="#334155" weight={1} dashArray="4 4" />;
-                    }
-                    return null;
-                })}
+                {data.map((forecast) => {
+                    const coords = COUNTRY_CENTROIDS[forecast.country];
+                    if (!coords) return null;
 
-                {/* Draw Nodes */}
-                {currentFrameData.map((forecast) => {
-                    const pos = COUNTRY_CENTROIDS[forecast.country];
-                    if (!pos) return null;
-
-                    const style = getMarkerStyle(forecast);
+                    const color = getDominantColor(forecast.variant_distribution);
 
                     return (
                         <CircleMarker
-                            key={forecast.id}
-                            center={pos}
-                            radius={style.radius}
-                            pathOptions={{
-                                color: style.color,
-                                fillColor: style.color,
-                                fillOpacity: style.fillOpacity,
-                                weight: 2
-                            }}
+                            key={`${forecast.country}-${forecast.forecast_date}`}
+                            center={coords}
+                            pathOptions={{ fillColor: color, color: '#fff', weight: 2, fillOpacity: 0.8 }}
+                            radius={15}
                         >
-                            <Popup className="bg-slate-900 border-slate-700">
-                                <div className="p-1">
-                                    <h4 className="font-bold text-slate-900">{forecast.country}</h4>
-                                    <p className="text-xs text-slate-500 mb-2">
-                                        Week: {forecast.week_iso}
+                            <Popup>
+                                <div className="p-2 min-w-[150px]">
+                                    <h3 className="font-bold text-slate-900 border-b pb-1 mb-2">
+                                        {forecast.country}
+                                    </h3>
+                                    <p className="text-xs text-slate-500 mb-2 font-mono">
+                                        {forecast.forecast_date}
                                     </p>
                                     <div className="space-y-1">
                                         {Object.entries(forecast.variant_distribution)
                                             .sort(([, a], [, b]) => b - a)
-                                            .map(([v, p]) => (
-                                                <div key={v} className="flex items-center justify-between text-xs gap-4">
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: VARIANT_COLORS[v] || '#ccc' }}></span>
-                                                        <span>{v}</span>
-                                                    </div>
-                                                    <span className="font-mono">{(p * 100).toFixed(0)}%</span>
+                                            .map(([variant, prob]) => (
+                                                <div key={variant} className="flex justify-between text-xs">
+                                                    <span className="text-slate-700 font-medium">{variant}</span>
+                                                    <span className="text-slate-500">{(prob * 100).toFixed(1)}%</span>
                                                 </div>
-                                            ))
-                                        }
+                                            ))}
                                     </div>
                                 </div>
                             </Popup>
@@ -193,6 +104,19 @@ export function SpreadMap() {
                     );
                 })}
             </MapContainer>
+
+            {/* Legend Overlay */}
+            <div className="absolute bottom-4 left-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur p-3 rounded-lg shadow-lg z-[1000] border border-slate-200 dark:border-slate-700">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wider">Dominant Variant</h4>
+                <div className="space-y-1">
+                    {Object.entries(VARIANT_COLORS).map(([variant, color]) => (
+                        <div key={variant} className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></div>
+                            <span className="text-xs text-slate-600 dark:text-slate-300">{variant}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }
