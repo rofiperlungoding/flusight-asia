@@ -1,76 +1,124 @@
-# FluSight-Asia
+# FluSight-Asia: H3N2 Influenza Mutation Intelligence Platform
 
-H3N2 Influenza Mutation Intelligence Platform for Asia.
+![Status](https://img.shields.io/badge/Status-Production_Ready-green)
+![License](https://img.shields.io/badge/License-MIT-blue)
+![Tech](https://img.shields.io/badge/Stack-PyTorch_React_Supabase-orange)
 
-## Overview
+**FluSight-Asia** is an enterprise-grade machine learning platform for predicting H3N2 influenza virus mutations in Asia. It combines genomic surveillance with deep learning to forecast viral evolution, helping public health officials anticipate the next dominant strain.
 
-Enterprise-grade ML platform for predicting H3N2 influenza virus mutations. Serves researchers, healthcare agencies, and academics through real-time dashboard, REST API, and research export tools.
+---
 
-## Key Features
+## 🚀 Live Demo & Dashboard
 
-- 🔮 **Mutation Prediction** — ML models forecast which variants will dominate
-- 🗺️ **Geographic Tracking** — Monitor spread patterns across Asian regions
-- 💉 **Vaccine Insights** — Assess vaccine effectiveness against emerging strains
-- 📊 **Real-time Dashboard** — Interactive visualizations and alerts
-- 🔌 **REST API** — Integrate predictions into healthcare systems
+*   **Frontend:** [Link to your Netlify deployment]
+*   **API:** [Link to Supabase URL]
 
-## Tech Stack
+---
 
-- **Frontend:** Vite + React 18 + TypeScript + Tailwind CSS
-- **Backend:** Supabase (PostgreSQL + Edge Functions)
-- **ML Pipeline:** Python + PyTorch + BioPython
-- **Hosting:** Netlify (frontend) + Hugging Face Spaces (ML)
-- **CI/CD:** GitHub Actions
+## 🧠 System Architecture
 
-## Project Structure
+The platform operates on a **zero-cost infrastructure** using free tiers of modern cloud services.
 
+```mermaid
+graph TD
+    A[Public Data Sources] -->|Ingest| B(GitHub Actions Pipeline)
+    B -->|Process & Train| C{ML Models}
+    C -->|Output| D[Supabase Database]
+    D -->|Realtime| E[React Dashboard]
+    
+    subgraph Machine Learning Engine
+    C1[Sequence LSTM] -->|Antigenic Drift| C
+    C2[Temporal Transformer] -->|Variant Projection| C
+    C3[Spatiotemporal GNN] -->|Geographic Spread| C
+    end
+    
+    subgraph Data Sources
+    A1[NCBI GenBank]
+    A2[GISAID]
+    end
 ```
-flusight-asia/
-├── frontend/          # Vite + React dashboard
-├── pipeline/          # Python data & ML pipeline
-├── supabase/          # Database migrations & edge functions
-├── .github/           # GitHub Actions workflows
-└── docs/              # Documentation
-```
 
-## Getting Started
+## ✨ Key Features
+
+### 1. 🔮 Predictive Modeling
+*   **Antigenic Drift (LSTM):** Predicts the cumulative mutation changes in the HA1 protein segment.
+*   **Variant Trajectory (Transformer):** Forecasts the probability distribution of competing clades over the next 12 weeks.
+*   **Geographic Spread (GNN):** Simulation of how variants travel between key Asian hubs (Bangkok, Tokyo, Singapore, etc.).
+
+### 2. 📊 Interactive Intelligence
+*   **Real-time Dashboard:** Built with React 18 & Tailwind CSS.
+*   **Sequence Explorer:** Search and filter thousands of H3N2 sequences by country, clade, and date.
+*   **Automated Insights:** Natural language summaries of high-risk trends.
+
+### 3. 🛡️ Enterprise Pipeline
+*   **Automated Ingestion:** Daily GitHub Actions workflow fetches new sequences from NCBI.
+*   **Quality Control:** Automated filtering of incomplete or low-quality sequences.
+*   **Versioned Data:** Full audit trail of data snapshots in PostgreSQL (Supabase).
+
+---
+
+## 🛠️ Technology Stack
+
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| **Frontend** | React 18, Vite, TypeScript | Fast, responsive dashboard UI |
+| **Styling** | Tailwind CSS | Modern, utility-first styling |
+| **Database** | Supabase (PostgreSQL) | Relational data + Vector storage |
+| **ML Engine** | PyTorch, PyTorch Geometric | Deep learning framework |
+| **Pipeline** | GitHub Actions, Python 3.11 | Automated ET(L) & Inference |
+| **Bioinformatics** | BioPython, MAFFT | Sequence alignment & parsing |
+
+---
+
+## 🏁 Getting Started
 
 ### Prerequisites
+*   Node.js 18+
+*   Python 3.11+
+*   Supabase Account
 
-- Node.js 18+
-- Python 3.11+
-- Supabase account (free tier)
-
-### Installation
-
+### 1. Clone the Repository
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/flusight-asia.git
+git clone https://github.com/rofiperlungoding/flusight-asia.git
 cd flusight-asia
-
-# Install frontend dependencies
-cd frontend
-npm install
-
-# Set up Python environment
-cd ../pipeline
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-pip install -e ".[dev]"
 ```
 
-### Environment Variables
+### 2. Backend Setup (Pipeline)
+```bash
+cd pipeline
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -e ".[dev]"
 
-Create `.env` files in `frontend/` and `pipeline/` directories based on `.env.example` templates.
+# Create a .env file based on .env.example
+# Run the pipeline locally
+python scripts/ingest.py
+```
 
-## License
+### 3. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-MIT
+---
 
-## Contributing
+## 🧪 Running Tests
 
-Contributions are welcome! Please read our contributing guidelines before submitting PRs.
+The project includes a comprehensive test suite for the ML pipeline.
 
-## Contact
+```bash
+cd pipeline
+pytest tests/
+```
 
-Built with ❤️ for the healthcare community.
+---
+
+## 📜 License
+
+This project is open-source under the [MIT License](LICENSE).
+
+---
+
+*Built with ❤️ for the global health community.*
