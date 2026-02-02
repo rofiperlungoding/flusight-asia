@@ -2,12 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
-interface DashboardStats {
-    totalSequences: number;
-    recentSequences: number; // Last 30 days
-    totalCountries: number;
-    lastUpdated: string | null;
-}
+
 
 export function useDashboardStats() {
     return useQuery({
@@ -19,10 +14,7 @@ export function useDashboardStats() {
                     .from('sequences')
                     .select('*', { count: 'exact', head: true });
 
-                if (countError || totalSequences === 0) {
-                    // If no data or error, return mock data
-                    return MOCK_STATS;
-                }
+                if (countError) throw countError;
 
                 // Get sequences from last 30 days
                 const thirtyDaysAgo = new Date();
@@ -57,65 +49,18 @@ export function useDashboardStats() {
                     lastUpdated: lastLog?.completed_at ?? null,
                 };
             } catch (e) {
-                console.warn('Failed to fetch dashboard stats, using mock data:', e);
-                return MOCK_STATS;
+                console.warn('Failed to fetch dashboard stats:', e);
+                return {
+                    totalSequences: 0,
+                    recentSequences: 0,
+                    totalCountries: 0,
+                    lastUpdated: null,
+                };
             }
         },
         staleTime: 1000 * 60 * 5, // 5 minutes
     });
 }
-
-const MOCK_STATS: DashboardStats = {
-    totalSequences: 12843,
-    recentSequences: 156,
-    totalCountries: 14,
-    lastUpdated: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-};
-
-const MOCK_LOGS = [
-    {
-        id: 'l1',
-        job_name: 'ncbi_ingest',
-        status: 'success',
-        started_at: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-        completed_at: new Date(Date.now() - 1000 * 60 * 60 * 3.8).toISOString(),
-        message: 'Ingested 156 new sequences from NCBI GenBank. 2 duplicates skipped.',
-        records_processed: 156,
-        records_failed: 0
-    },
-    {
-        id: 'l2',
-        job_name: 'metadata_enrichment',
-        status: 'success',
-        started_at: new Date(Date.now() - 1000 * 60 * 60 * 3.8).toISOString(),
-        completed_at: new Date(Date.now() - 1000 * 60 * 60 * 3.7).toISOString(),
-        message: 'Enriched metadata for 154 sequences. 2 missing location data.',
-        records_processed: 156,
-        records_failed: 0
-    },
-    {
-        id: 'l3',
-        job_name: 'mutation_analysis',
-        status: 'processing',
-        started_at: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
-        completed_at: null,
-        message: 'Analyzing H3N2 HA segment mutations...',
-        records_processed: 45,
-        records_failed: 0
-    },
-    {
-        id: 'l4',
-        job_name: 'phylogenetic_tree',
-        status: 'failure',
-        started_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        completed_at: new Date(Date.now() - 1000 * 60 * 60 * 23.9).toISOString(),
-        message: 'Timeout waiting for TreeTime convergence. Retrying in next batch.',
-        records_processed: 0,
-        records_failed: 1
-    }
-];
-
-
 
 export function usePipelineLogs(limit: number = 10) {
     const queryClient = useQueryClient();
@@ -147,24 +92,15 @@ export function usePipelineLogs(limit: number = 10) {
     return useQuery({
         queryKey: ['stats', 'pipeline-logs', limit],
         queryFn: async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('pipeline_logs')
-                    .select('*')
-                    .order('started_at', { ascending: false })
-                    .limit(limit);
+            const { data, error } = await supabase
+                .from('pipeline_logs')
+                .select('*')
+                .order('started_at', { ascending: false })
+                .limit(limit);
 
-                if (error || !data || data.length === 0) {
-                    return MOCK_LOGS.slice(0, limit);
-                }
-
-                return data ?? [];
-            } catch (e) {
-                console.warn('Failed to fetch pipeline logs, using mock data', e);
-                return MOCK_LOGS.slice(0, limit);
-            }
+            if (error) throw error;
+            return data ?? [];
         },
-        // Longer stale time is fine now because realtime invalidates it
         staleTime: 1000 * 60 * 5,
     });
 }
@@ -182,18 +118,10 @@ export function useLocationStats() {
             locations!inner(country, country_code, lat, lng)
             `);
 
-                if (error || !data || data.length === 0) {
-                    // Return mock location stats
-                    return [
-                        { count: 450, country: 'Thailand', lat: 15.8700, lng: 100.9925 },
-                        { count: 320, country: 'Vietnam', lat: 14.0583, lng: 108.2772 },
-                        { count: 210, country: 'Indonesia', lat: -0.7893, lng: 113.9213 },
-                        { count: 180, country: 'Philippines', lat: 12.8797, lng: 121.7740 },
-                        { count: 150, country: 'Malaysia', lat: 4.2105, lng: 101.9758 },
-                        { count: 120, country: 'Singapore', lat: 1.3521, lng: 103.8198 },
-                        { count: 90, country: 'Cambodia', lat: 12.5657, lng: 104.9910 },
-                        { count: 80, country: 'Laos', lat: 19.8563, lng: 102.4955 },
-                    ];
+                if (error) throw error;
+
+                if (!data || data.length === 0) {
+                    return [];
                 }
 
                 // Aggregate counts by country
@@ -216,10 +144,8 @@ export function useLocationStats() {
 
                 return Object.values(countsByCountry).sort((a, b) => b.count - a.count);
             } catch (e) {
-                return [
-                    { count: 450, country: 'Thailand', lat: 15.8700, lng: 100.9925 },
-                    { count: 320, country: 'Vietnam', lat: 14.0583, lng: 108.2772 },
-                ];
+                console.warn('Failed to fetch location stats:', e);
+                return [];
             }
         },
     });
