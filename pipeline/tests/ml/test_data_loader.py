@@ -8,7 +8,8 @@ def test_fetch_training_data_returns_dataframe():
     try:
         df = fetch_training_data(limit=10)
         assert not df.empty
-        assert 'sequence' in df.columns
+        # Supabase returns 'amino_acid_sequence' or 'raw_sequence'
+        assert 'amino_acid_sequence' in df.columns or 'raw_sequence' in df.columns
         assert 'collection_date' in df.columns
     except Exception as e:
         # Debugging info
