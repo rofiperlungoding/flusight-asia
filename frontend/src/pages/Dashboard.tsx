@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
+import XLSX from 'xlsx-js-style';
 import { useDashboardStats, useRecentSequences, usePipelineLogs } from '../hooks';
+import { useGeoForecasts } from '../hooks/useGeoForecasts';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { ClusterMap } from '../components/Map/ClusterMap';
@@ -17,6 +19,7 @@ export function Dashboard() {
     const { data: recentSeqs, isLoading: seqsLoading } = useRecentSequences(5);
     const { data: logs, isLoading: logsLoading } = usePipelineLogs(5);
     const { data: forecasts } = useForecasts();
+    const { data: geoForecasts } = useGeoForecasts();
 
     const handleGeneratePDF = () => {
         if (stats) {
@@ -27,6 +30,117 @@ export function Dashboard() {
     const formatLastUpdated = (date: string | null) => {
         if (!date) return 'Never';
         return formatDistanceToNow(new Date(date), { addSuffix: true });
+    };
+
+    const handleDownload = async () => {
+        try {
+            // 1. Fetch all data (real data only)
+            const { data, error } = await supabase
+                .from('sequences')
+                .select('*')
+                .order('collection_date', { ascending: false });
+
+            if (error) throw error;
+            if (!data) return;
+
+            // 2. Process data - Split Strain Name
+            const processedData = data.map((seq: any) => {
+                // Parse Strain Name: A/Location/ID/Year
+                const parts = seq.strain_name.split('/');
+                let location = seq.location?.country || 'Unknown';
+                let year = '';
+
+                if (parts.length >= 3) {
+                    // Start from end for year
+                    const lastPart = parts[parts.length - 1];
+                    if (lastPart.match(/^\d{4}$/)) {
+                        year = lastPart;
+                    }
+
+                    // Try to guess location if unknown (usually 2nd part)
+                    if (location === 'Unknown' && parts.length >= 2) {
+                        location = parts[1];
+                    }
+                }
+
+                // Fallback for year from collection date
+                if (!year && seq.collection_date) {
+                    year = seq.collection_date.split('-')[0];
+                }
+
+                return [
+                    seq.id,
+                    seq.strain_name,
+                    seq.subtype || 'H3N2',
+                    location,
+                    year,
+                    seq.collection_date,
+                    seq.sequence_length,
+                    seq.source || 'GISAID'
+                ];
+            });
+
+            // 3. Add Header
+            const headers = [
+                ['ID', 'Strain Name', 'Subtype', 'Location', 'Year', 'Collection Date', 'Length (bp)', 'Source']
+            ];
+
+            // 4. Create Sheet
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([...headers, ...processedData]);
+
+            // 5. Apply Styles (xlsx-js-style)
+            // Header Style
+            const headerStyle = {
+                font: { bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "2c3e50" } }, // Dark Blue/Slate
+                alignment: { horizontal: "center", vertical: "center" },
+                border: {
+                    top: { style: "thin", color: { rgb: "000000" } },
+                    bottom: { style: "thin", color: { rgb: "000000" } },
+                    left: { style: "thin", color: { rgb: "000000" } },
+                    right: { style: "thin", color: { rgb: "000000" } }
+                }
+            };
+
+            // Apply to first row (A1:H1)
+            const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:H1');
+            for (let C = range.s.c; C <= range.e.c; ++C) {
+                const address = XLSX.utils.encode_cell({ r: 0, c: C });
+                if (!ws[address]) continue;
+                ws[address].s = headerStyle;
+            }
+
+            // Column Widths
+            ws['!cols'] = [
+                { wch: 10 }, // ID
+                { wch: 35 }, // Strain Name
+                { wch: 10 }, // Subtype
+                { wch: 20 }, // Location
+                { wch: 8 },  // Year
+                { wch: 15 }, // Date
+                { wch: 12 }, // Length
+                { wch: 10 }  // Source
+            ];
+
+            // Data Styling (Center align specifics)
+            for (let R = 1; R <= processedData.length; ++R) {
+                // Year (Col 4 / E)
+                const yearCell = XLSX.utils.encode_cell({ r: R, c: 4 });
+                if (ws[yearCell]) ws[yearCell].s = { alignment: { horizontal: "center" } };
+
+                // Length (Col 6 / G)
+                const lenCell = XLSX.utils.encode_cell({ r: R, c: 6 });
+                if (ws[lenCell]) ws[lenCell].s = { alignment: { horizontal: "center" } };
+            }
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Sequences');
+            XLSX.writeFile(wb, `FluSight_Asia_Sequences_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+        } catch (e) {
+            console.error('Download failed:', e);
+            alert('Failed to download data. Please try again.');
+        }
     };
 
     return (
@@ -55,65 +169,10 @@ export function Dashboard() {
                     </button>
                     <button
                         className="btn-primary flex items-center gap-2"
-                        // Import xlsx dynamically or use if imported at top. 
-                        // Since we cannot easily add top-level imports with replace_file_content unless we replace the header, 
-                        // We will rely on the fact that we can do `import(...)` or we should add the import at the top first.
-                        // However, adding import at top is safer. 
-                        // Let's assume we will add the import in a separate step or try to use inline require if environment supports it (Vite usually supports dynamic import).
-                        // Better: Replace the whole button onClick logic.
-
-                        onClick={async () => {
-                            try {
-                                const { utils, writeFile } = await import("xlsx");
-
-                                // Fetch data (limit 10000 as requested)
-                                const { data } = await supabase
-                                    .from('sequences')
-                                    .select('strain_name, genbank_id, collection_date, subtype, segment, sequence_length, host, source, created_at')
-                                    .limit(10000)
-                                    .order('collection_date', { ascending: false });
-
-                                if (!data || data.length === 0) {
-                                    alert("No data available to export.");
-                                    return;
-                                }
-
-                                // Format data for Excel
-                                const formattedData = data.map(item => ({
-                                    "Strain Name": item.strain_name,
-                                    "GenBank ID": item.genbank_id,
-                                    "Collection Date": item.collection_date || "Unknown",
-                                    "Subtype": item.subtype,
-                                    "Segment": item.segment,
-                                    "Length (bp)": item.sequence_length,
-                                    "Host": item.host,
-                                    "Source": item.source,
-                                    "Added To System": new Date(item.created_at).toLocaleDateString()
-                                }));
-
-                                // Create Workbook
-                                const wb = utils.book_new();
-                                const ws = utils.json_to_sheet(formattedData);
-
-                                // Auto-width columns (simple heuristic)
-                                const colWidths = Object.keys(formattedData[0]).map(key => ({
-                                    wch: Math.max(key.length, ...formattedData.map(row => String(row[key as keyof typeof row] || "").length)) + 2
-                                }));
-                                ws['!cols'] = colWidths;
-
-                                utils.book_append_sheet(wb, ws, "Sequences");
-
-                                // Save file
-                                writeFile(wb, `flusight-asi-export-${new Date().toISOString().split('T')[0]}.xlsx`);
-
-                            } catch (e) {
-                                console.error("Export failed", e);
-                                alert("Failed to export data. Please check console.");
-                            }
-                        }}
+                        onClick={handleDownload}
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                        Download Excel (10k)
+                        Download Data (Excel)
                     </button>
                 </div>
             </div>
@@ -141,7 +200,7 @@ export function Dashboard() {
                     {
                         label: 'Total Sequences',
                         value: statsLoading ? '...' : stats?.totalSequences.toLocaleString() ?? '0',
-                        sub: `Last updated: ${formatLastUpdated(stats?.lastUpdated ?? null)}`,
+                        sub: `Last updated: ${formatLastUpdated(stats?.lastUpdated ?? null)} `,
                         icon: '🧬',
                         color: 'text-indigo-500'
                     },
@@ -170,7 +229,7 @@ export function Dashboard() {
                     <div key={i} className="card card-hover border-t-4 border-t-transparent hover:border-t-primary-500">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 font-sans tracking-wide uppercase text-[11px]">{stat.label}</h3>
-                            <span className={`p-2.5 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-xl ${stat.color}`}>{stat.icon}</span>
+                            <span className={`p - 2.5 bg - slate - 50 dark: bg - slate - 700 / 50 rounded - lg text - xl ${stat.color} `}>{stat.icon}</span>
                         </div>
                         <p className="text-3xl font-bold text-slate-900 dark:text-white font-sans">{stat.value}</p>
                         <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-medium">{stat.sub}</p>
@@ -200,7 +259,7 @@ export function Dashboard() {
                         ) : logs && logs.length > 0 ? (
                             logs.map((log) => (
                                 <div key={log.id} className="flex items-start gap-4 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 hover:bg-slate-800 transition-colors">
-                                    <div className={`mt-1 p-1.5 rounded-full ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                    <div className={`mt - 1 p - 1.5 rounded - full ${log.status === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'} `}>
                                         {log.status === 'success' ? (
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                         ) : (
@@ -285,7 +344,7 @@ export function Dashboard() {
                             recentSeqs.map((seq) => (
                                 <Link
                                     key={seq.id}
-                                    to={`/sequences/${seq.id}`}
+                                    to={`/ sequences / ${seq.id} `}
                                     className="group flex gap-4 p-3 rounded-xl bg-slate-50/50 dark:bg-slate-700/20 border border-slate-100 dark:border-slate-700/30 hover:bg-white dark:hover:bg-slate-700/50 hover:shadow-md hover:shadow-slate-200/50 dark:hover:shadow-none hover:border-primary-200 dark:hover:border-primary-500/30 transition-all cursor-pointer"
                                 >
                                     <div className="w-2 h-2 mt-2 rounded-full bg-primary-500 shrink-0 group-hover:scale-125 transition-transform"></div>
@@ -368,7 +427,7 @@ export function Dashboard() {
 
             {/* GNN Spread Simulation */}
             <div className="card bg-slate-900 border border-slate-800 p-0 overflow-hidden">
-                <SpreadMap />
+                <SpreadMap data={geoForecasts || []} />
             </div>
 
         </div>

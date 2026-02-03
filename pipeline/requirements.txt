@@ -1,0 +1,8 @@
+torch
+supabase
+httpx
+python-dotenv
+python-dateutil
+pandas
+numpy
+biopython

@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
 export interface Forecast {
@@ -12,6 +13,26 @@ export interface Forecast {
 }
 
 export function useForecasts(region: string = 'Asia') {
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        const channel = supabase
+            .channel('forecasts_realtime')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'forecasts' },
+                (payload) => {
+                    console.log('New forecast received!', payload);
+                    queryClient.invalidateQueries({ queryKey: ['forecasts', region] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [queryClient, region]);
+
     return useQuery({
         queryKey: ['forecasts', region],
         queryFn: async () => {
