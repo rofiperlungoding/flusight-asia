@@ -45,9 +45,19 @@ def main():
     # 2. Replay Loop
     logging.info("Beginning Replay Stream. Press Ctrl+C to stop.")
     
+    # Check for Batch Mode (Cloud Run)
+    batch_limit = int(os.environ.get("BATCH_SIZE", 0))
+    if batch_limit > 0:
+        logging.info(f"Batch Mode Active: Injecting {batch_limit} sequences...")
+    
     count = 0
     try:
         while True:
+            # Check batch limit
+            if batch_limit > 0 and count >= batch_limit:
+                logging.info(f"Batch limit declared ({batch_limit}) reached. Exiting.")
+                break
+
             # Pick a random sequence
             seed_record = random.choice(data_pool)
             
@@ -57,7 +67,7 @@ def main():
             new_record = seed_record.copy()
             new_record['id'] = new_id
             new_record['created_at'] = datetime.now().isoformat() # This triggers the watcher
-            new_record['strain_name'] = f"{seed_record['strain_name']}-LIVE" # Mark as live
+            new_record['strain_name'] = f"{seed_record['strain_name']}-CLOUD" # Mark as cloud
             
             # Insert
             try:
@@ -67,9 +77,8 @@ def main():
             except Exception as insert_err:
                 logging.error(f"Insert failed: {insert_err}")
                 
-            # Wait random interval (3-6 seconds)
-            wait_time = random.uniform(3, 6)
-            time.sleep(wait_time)
+            # Wait random interval (small delay even in batch for timestamp diffs)
+            time.sleep(1)
             
     except KeyboardInterrupt:
         logging.info("\nStream Replay Stopped.")

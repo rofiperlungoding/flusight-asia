@@ -32,6 +32,12 @@ jobs:
           # Ensure critical packages are installed if requirements.txt is missing/incomplete
           pip install supabase torch httpx python-dotenv python-dateutil
 
+      - name: Inject Simulated Data (Cloud Feeder)
+        env:
+            BATCH_SIZE: "5" # Inject 5 new records per run
+        run: |
+            python pipeline/scripts/stream_replay.py
+
       - name: Run Live Learning Pipeline
         run: |
           python pipeline/scripts/live_pipeline.py
