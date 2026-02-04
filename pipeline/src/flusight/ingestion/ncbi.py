@@ -99,50 +99,93 @@ class NCBIFetcher:
         
         return " AND ".join(query_parts)
     
-    def search(self, query: str, max_results: int = 1000) -> list[str]:
+    def search(self, query: str, max_results: int = 1000, max_retries: int = 3) -> list[str]:
         """Search NCBI and return list of accession IDs.
         
         Args:
             query: NCBI Entrez search query string.
             max_results: Maximum number of results to return.
+            max_retries: Maximum number of retry attempts for transient failures.
             
         Returns:
             List of GenBank accession IDs.
+            
+        Raises:
+            RuntimeError: If all retry attempts fail.
         """
-        handle = Entrez.esearch(
-            db=self.database,
-            term=query,
-            retmax=max_results,
-            usehistory="y",
-        )
-        record = Entrez.read(handle)
-        handle.close()
+        last_exception = None
         
-        return record["IdList"]
+        for attempt in range(max_retries):
+            try:
+                handle = Entrez.esearch(
+                    db=self.database,
+                    term=query,
+                    retmax=max_results,
+                    usehistory="y",
+                )
+                record = Entrez.read(handle)
+                handle.close()
+                
+                return record["IdList"]
+                
+            except RuntimeError as e:
+                last_exception = e
+                # Handle transient NCBI errors like "Search Backend failed"
+                if "Backend" in str(e) or "timeout" in str(e).lower():
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    print(f"⚠️ NCBI API error (attempt {attempt + 1}/{max_retries}): {e}")
+                    print(f"   Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    raise
+        
+        # All retries exhausted
+        raise RuntimeError(f"NCBI search failed after {max_retries} attempts: {last_exception}")
     
-    def fetch_records(self, ids: list[str]) -> Iterator[SeqRecord]:
+    def fetch_records(self, ids: list[str], max_retries: int = 3) -> Iterator[SeqRecord]:
         """Fetch sequence records by ID in batches.
         
         Args:
             ids: List of GenBank accession IDs.
+            max_retries: Maximum number of retry attempts per batch for transient failures.
             
         Yields:
             BioPython SeqRecord objects.
         """
         for i in range(0, len(ids), self.batch_size):
             batch_ids = ids[i:i + self.batch_size]
+            batch_num = i // self.batch_size + 1
             
-            handle = Entrez.efetch(
-                db=self.database,
-                id=",".join(batch_ids),
-                rettype="gb",
-                retmode="text",
-            )
-            
-            for record in SeqIO.parse(handle, "genbank"):
-                yield record
-            
-            handle.close()
+            # Retry logic for each batch
+            for attempt in range(max_retries):
+                try:
+                    handle = Entrez.efetch(
+                        db=self.database,
+                        id=",".join(batch_ids),
+                        rettype="gb",
+                        retmode="text",
+                    )
+                    
+                    for record in SeqIO.parse(handle, "genbank"):
+                        yield record
+                    
+                    handle.close()
+                    break  # Success, exit retry loop
+                    
+                except (RuntimeError, IOError, Exception) as e:
+                    error_msg = str(e).lower()
+                    # Handle transient NCBI errors
+                    if any(keyword in error_msg for keyword in ["backend", "timeout", "connection", "reset"]):
+                        if attempt < max_retries - 1:
+                            wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                            print(f"⚠️ Batch {batch_num} fetch error (attempt {attempt + 1}/{max_retries}): {e}")
+                            print(f"   Retrying in {wait_time} seconds...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"❌ Batch {batch_num} failed after {max_retries} attempts: {e}")
+                            raise
+                    else:
+                        raise
             
             # Rate limiting: NCBI allows 10 requests/second with API key, 3 without
             time.sleep(0.5)
